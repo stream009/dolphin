@@ -178,7 +178,7 @@ QString KBalooRolesProvider::orientationFromValue(int value) const
 
 QString KBalooRolesProvider::durationFromValue(int value) const
 {
-    QTime duration;
+    QTime duration(0, 0, 0, 0);
     duration = duration.addSecs(value);
     return duration.toString("hh:mm:ss");
 }
