@@ -692,13 +692,13 @@ void KFileItemModelRolesUpdater::resolveRecentlyChangedItems()
     updateChangedItems();
 }
 
-void KFileItemModelRolesUpdater::applyChangedBalooRoles(const QString& itemUrl)
+void KFileItemModelRolesUpdater::applyChangedBalooRoles(const QString& itemPath)
 {
 #ifdef HAVE_BALOO
-    const KFileItem item = m_model->fileItem(itemUrl);
+    const KFileItem item = m_model->fileItem(QUrl::fromLocalFile(itemPath));
 
     if (item.isNull()) {
-        // itemUrl is not in the model anymore, probably because
+        // itemPath is not in the model anymore, probably because
         // the corresponding file has been deleted in the meantime.
         return;
     }
@@ -730,7 +730,7 @@ void KFileItemModelRolesUpdater::applyChangedBalooRoles(const QString& itemUrl)
             this,    &KFileItemModelRolesUpdater::slotItemsChanged);
 #else
 #ifndef Q_CC_MSVC
-    Q_UNUSED(itemUrl);
+    Q_UNUSED(itemPath);
 #endif
 #endif
 }
