@@ -22,6 +22,7 @@
 #include "dolphintabbar.h"
 #include "dolphintabpage.h"
 #include "dolphinviewcontainer.h"
+#include "dolphinplacesmodel.h"
 
 #include <QApplication>
 #include <KConfigGroup>
@@ -242,7 +243,18 @@ void DolphinTabWidget::slotPlacesPanelVisibilityChanged(bool visible)
     for (int i = 0; i < tabCount; ++i) {
         DolphinTabPage* tabPage = tabPageAt(i);
         tabPage->setPlacesSelectorVisible(m_placesSelectorVisible);
+
+        // Get URL of the active view of the tab page
+        // TODO Factor out to DelphinTabPage
+        const auto* const activeView = tabPage->activeViewContainer();
+        Q_ASSERT(activeView);
+
+        const auto &url = activeView->url();
+        Q_ASSERT(url.isValid());
+
+        this->setTabText(i, tabName(url));
     }
+
 }
 
 void DolphinTabWidget::restoreClosedTab(const QByteArray& state)
@@ -333,6 +345,12 @@ void DolphinTabWidget::tabRemoved(int index)
 
 QString DolphinTabWidget::tabName(const QUrl& url) const
 {
+    const auto &placesModel = DolphinPlacesModel::instance();
+    const QString placeName = placesModel.text(url);
+    if (!placeName.isEmpty()) {
+        return placeName;
+    }
+
     QString name;
     if (url == QUrl("file:///")) {
         name = '/';

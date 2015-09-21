@@ -28,6 +28,7 @@
 #include "dolphintabwidget.h"
 #include "dolphinviewcontainer.h"
 #include "dolphintabpage.h"
+#include "dolphinplacesmodel.h"
 #include "panels/folders/folderspanel.h"
 #include "panels/places/placespanel.h"
 #include "panels/information/informationpanel.h"
@@ -957,12 +958,19 @@ void DolphinMainWindow::setUrlAsCaption(const QUrl& url)
         }
     }
 
-    QString fileName = url.adjusted(QUrl::StripTrailingSlash).fileName();
-    if (fileName.isEmpty()) {
-        fileName = '/';
-    }
+    const auto &placesModel = DolphinPlacesModel::instance();
+    const auto &placeName = placesModel.text(url);
 
-    caption.append(fileName);
+    if (!placeName.isEmpty()) {
+        caption.append(placeName);
+    }
+    else {
+        QString fileName = url.adjusted(QUrl::StripTrailingSlash).fileName();
+        if (fileName.isEmpty()) {
+            fileName = '/';
+        }
+        caption.append(fileName);
+    }
 
     setWindowTitle(caption);
 }

@@ -248,6 +248,7 @@ set(dolphin_SRCS
     dolphindebug.cpp
     dbusinterface.cpp
     global.cpp
+    dolphinplacesmodel.cpp
 )
 
 kconfig_add_kcfg_files(dolphin_SRCS GENERATE_MOC
