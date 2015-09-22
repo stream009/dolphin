@@ -29,6 +29,7 @@
 #include <QCollator>
 #include <QHash>
 #include <QSet>
+#include <QDateTime>
 
 class KFileItemModelDirLister;
 class QTimer;
@@ -281,7 +282,7 @@ private:
     enum RoleType {
         // User visible roles:
         NoRole, NameRole, SizeRole, DateRole, PermissionsRole, OwnerRole,
-        GroupRole, TypeRole, DestinationRole, PathRole,
+        GroupRole, TypeRole, DestinationRole, PathRole, DeletionDateRole,
         // User visible roles available with Baloo:
         CommentRole, TagsRole, RatingRole, ImageSizeRole, OrientationRole,
         WordCountRole, LineCountRole, ArtistRole, AlbumRole, DurationRole, TrackRole,
@@ -383,7 +384,7 @@ private:
 
     QList<QPair<int, QVariant> > nameRoleGroups() const;
     QList<QPair<int, QVariant> > sizeRoleGroups() const;
-    QList<QPair<int, QVariant> > dateRoleGroups() const;
+    QList<QPair<int, QVariant> > dateRoleGroups(const RoleType) const;
     QList<QPair<int, QVariant> > permissionRoleGroups() const;
     QList<QPair<int, QVariant> > ratingRoleGroups() const;
     QList<QPair<int, QVariant> > genericStringRoleGroups(const QByteArray& typeForRole) const;
@@ -452,6 +453,11 @@ private:
      * Checks if the model's internal data structures are consistent.
      */
     bool isConsistent() const;
+
+    /**
+     * @return specified item's datetime object for given role type.
+     */
+    QDateTime groupingDateTime(const ItemData *, const RoleType) const;
 
 private:
     KFileItemModelDirLister* m_dirLister;

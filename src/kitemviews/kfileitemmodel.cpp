@@ -329,13 +329,16 @@ QList<QPair<int, QVariant> > KFileItemModel::groups() const
         QElapsedTimer timer;
         timer.start();
 #endif
+        const auto &role = sortRole();
+        const auto &roleType = typeForRole(role);
         switch (typeForRole(sortRole())) {
         case NameRole:        m_groups = nameRoleGroups(); break;
         case SizeRole:        m_groups = sizeRoleGroups(); break;
-        case DateRole:        m_groups = dateRoleGroups(); break;
+        case DeletionDateRole:
+        case DateRole:        m_groups = dateRoleGroups(roleType); break;
         case PermissionsRole: m_groups = permissionRoleGroups(); break;
         case RatingRole:      m_groups = ratingRoleGroups(); break;
-        default:              m_groups = genericStringRoleGroups(sortRole()); break;
+        default:              m_groups = genericStringRoleGroups(role); break;
         }
 
 #ifdef KFILEITEMMODEL_DEBUG
@@ -1294,6 +1297,7 @@ void KFileItemModel::prepareItemsForSorting(QList<ItemData*>& itemDataList)
     case GroupRole:
     case DestinationRole:
     case PathRole:
+    case DeletionDateRole:
         // These roles can be determined with retrieveData, and they have to be stored
         // in the QHash "values" for the sorting.
         foreach (ItemData* itemData, itemDataList) {
@@ -1558,6 +1562,18 @@ QHash<QByteArray, QVariant> KFileItemModel::retrieveData(const KFileItem& item, 
         data.insert(sharedValue("path"), path);
     }
 
+    if (m_requestRole[DeletionDateRole] &&
+                        item.url().scheme() == QLatin1String("trash"))
+    {
+        const auto &dateTime = QDateTime::fromString(
+            item.entry().stringValue(KIO::UDSEntry::UDS_EXTRA + 1),
+            Qt::ISODate
+        );
+        if (dateTime.isValid()) {
+            data.insert(sharedValue("deletionDate"), dateTime);
+        }
+    }
+
     if (m_requestRole[IsExpandableRole] && isDir) {
         data.insert(sharedValue("isExpandable"), true);
     }
@@ -1751,6 +1767,24 @@ int KFileItemModel::sortRoleCompare(const ItemData* a, const ItemData* b, const 
         break;
     }
 
+    case DeletionDateRole: {
+        Q_ASSERT(a->values.find("deletionDate") != a->values.end());
+        Q_ASSERT(b->values.find("deletionDate") != a->values.end());
+        const QDateTime dateTimeA =
+                                a->values.value("deletionDate").toDateTime();
+        const QDateTime dateTimeB =
+                                b->values.value("deletionDate").toDateTime();
+        Q_ASSERT(dataTimeA.isValid());
+        Q_ASSERT(dataTimeB.isValid());
+
+        if (dateTimeA < dateTimeB) {
+            result = -1;
+        } else if (dateTimeA > dateTimeB) {
+            result = +1;
+        }
+        break;
+    }
+
     default: {
         const QByteArray role = roleForType(m_sortRole);
         result = QString::compare(a->values.value(role).toString(),
@@ -1906,7 +1940,22 @@ QList<QPair<int, QVariant> > KFileItemModel::sizeRoleGroups() const
     return groups;
 }
 
-QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups() const
+QDateTime KFileItemModel::groupingDateTime(const ItemData *item,
+                                           const RoleType roleType) const
+{
+    switch (roleType) {
+    case DateRole:
+        return item->item.time(KFileItem::ModificationTime);
+    case DeletionDateRole:
+        return { item->values.value("deletionDate").toDateTime() };
+    default:
+        qWarning() << "Unknown role type:" << roleType;
+        return {};
+    }
+    Q_ASSERT(false && "never reach here");
+}
+
+QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups(const RoleType roleType) const
 {
     Q_ASSERT(!m_itemData.isEmpty());
 
@@ -1915,26 +1964,27 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups() const
 
     const QDate currentDate = QDate::currentDate();
 
-    QDate previousModifiedDate;
+    QDate previousItemDate;
     QString groupValue;
     for (int i = 0; i <= maxIndex; ++i) {
         if (isChildItem(i)) {
             continue;
         }
 
-        const QDateTime modifiedTime = m_itemData.at(i)->item.time(KFileItem::ModificationTime);
-        const QDate modifiedDate = modifiedTime.date();
-        if (modifiedDate == previousModifiedDate) {
+        const auto &itemDateTime =
+                                groupingDateTime(m_itemData.at(i), roleType);
+        const QDate itemDate = itemDateTime.date();
+        if (itemDate == previousItemDate) {
             // The current item is in the same group as the previous item
             continue;
         }
-        previousModifiedDate = modifiedDate;
+        previousItemDate = itemDate;
 
-        const int daysDistance = modifiedDate.daysTo(currentDate);
+        const int daysDistance = itemDate.daysTo(currentDate);
 
         QString newGroupValue;
-        if (currentDate.year() == modifiedDate.year() &&
-            currentDate.month() == modifiedDate.month()) {
+        if (currentDate.year() == itemDate.year() &&
+            currentDate.month() == itemDate.month()) {
 
             switch (daysDistance / 7) {
             case 0:
@@ -1942,7 +1992,7 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups() const
                 case 0:  newGroupValue = i18nc("@title:group Date", "Today"); break;
                 case 1:  newGroupValue = i18nc("@title:group Date", "Yesterday"); break;
                 default:
-                    newGroupValue = modifiedTime.toString(
+                    newGroupValue = itemDateTime.toString(
                         i18nc("@title:group Date: The week day name: dddd", "dddd"));
                     newGroupValue = i18nc("Can be used to script translation of \"dddd\""
                         "with context @title:group Date", "%1", newGroupValue);
@@ -1966,18 +2016,18 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups() const
             }
         } else {
             const QDate lastMonthDate = currentDate.addMonths(-1);
-            if  (lastMonthDate.year() == modifiedDate.year() &&
-                 lastMonthDate.month() == modifiedDate.month()) {
+            if  (lastMonthDate.year() == itemDate.year() &&
+                 lastMonthDate.month() == itemDate.month()) {
 
                 if (daysDistance == 1) {
-                    newGroupValue = modifiedTime.toString(i18nc("@title:group Date: "
+                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Yesterday' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'Yesterday' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7) {
-                    newGroupValue = modifiedTime.toString(i18nc("@title:group Date: "
+                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
                         "The week day name: dddd, MMMM is full month name "
                         "in current locale, and yyyy is full year number",
                         "dddd (MMMM, yyyy)"));
@@ -1985,28 +2035,28 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups() const
                         "\"dddd (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7 * 2) {
-                    newGroupValue = modifiedTime.toString(i18nc("@title:group Date: "
+                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'One Week Ago' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'One Week Ago' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7 * 3) {
-                    newGroupValue = modifiedTime.toString(i18nc("@title:group Date: "
+                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Two Weeks Ago' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'Two Weeks Ago' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7 * 4) {
-                    newGroupValue = modifiedTime.toString(i18nc("@title:group Date: "
+                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Three Weeks Ago' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'Three Weeks Ago' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else {
-                    newGroupValue = modifiedTime.toString(i18nc("@title:group Date: "
+                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Earlier on' MMMM, yyyy"));
                     newGroupValue = i18nc("Can be used to script translation of "
@@ -2014,7 +2064,7 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups() const
                         "%1", newGroupValue);
                 }
             } else {
-                newGroupValue = modifiedTime.toString(i18nc("@title:group "
+                newGroupValue = itemDate.toString(i18nc("@title:group "
                     "The month and year: MMMM is full month name in current locale, "
                     "and yyyy is full year number", "MMMM, yyyy"));
                 newGroupValue = i18nc("Can be used to script translation of "
@@ -2204,6 +2254,7 @@ const KFileItemModel::RoleInfoMap* KFileItemModel::rolesInfoMap(int& count)
         { "permissions", PermissionsRole, I18N_NOOP2_NOSTRIP("@label", "Permissions"),      I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "owner",       OwnerRole,       I18N_NOOP2_NOSTRIP("@label", "Owner"),            I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "group",       GroupRole,       I18N_NOOP2_NOSTRIP("@label", "User Group"),       I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
+        { "deletionDate", DeletionDateRole, I18N_NOOP2_NOSTRIP("@label", "Deletion Date"),  I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
     };
 
     count = sizeof(rolesInfoMap) / sizeof(RoleInfoMap);
