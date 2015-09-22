@@ -40,6 +40,9 @@
 #include <QTimer>
 #include <QAccessible>
 
+#include <KConfigGroup>
+#include <KSharedConfig>
+
 KItemListController::KItemListController(KItemModelBase* model, KItemListView* view, QObject* parent) :
     QObject(parent),
     m_singleClickActivationEnforced(false),
@@ -1144,6 +1147,27 @@ void KItemListController::slotRubberBandChanged()
     }
 }
 
+// Copied from kio/widgets/dropjob.cpp
+// TODO This should be KIO::DropJob's static member function
+//      which means changing interface of KIO library.
+static Qt::DropAction defaultDropAction()
+{
+    const auto &kioConfig =
+                      KSharedConfig::openConfig("kiorc", KConfig::NoGlobals);
+
+    const auto &group = kioConfig->group("Drop job");
+    const auto &result = static_cast<Qt::DropAction>(
+                        group.readEntry("defaultDropAction",
+                                        static_cast<int>(Qt::IgnoreAction)));
+
+    const auto &isValid = (result == Qt::IgnoreAction ||
+                           result == Qt::CopyAction ||
+                           result == Qt::MoveAction);
+    Q_ASSERT(isValid);
+
+    return isValid ? result : Qt::IgnoreAction;
+}
+
 void KItemListController::startDragging()
 {
     if (!m_view || !m_model) {
@@ -1171,7 +1195,9 @@ void KItemListController::startDragging()
     const QPoint hotSpot((pixmap.width() / pixmap.devicePixelRatio()) / 2, 0);
     drag->setHotSpot(hotSpot);
 
-    drag->exec(Qt::MoveAction | Qt::CopyAction | Qt::LinkAction, Qt::CopyAction);
+    const auto &defaultAction = defaultDropAction();
+    drag->exec(Qt::MoveAction | Qt::CopyAction | Qt::LinkAction,
+        defaultAction != Qt::IgnoreAction ? defaultAction : Qt::CopyAction);
 
     QAccessibleEvent accessibilityEvent(view(), QAccessible::DragDropStart);
     QAccessible::updateAccessibility(&accessibilityEvent);
