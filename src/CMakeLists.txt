@@ -29,7 +29,6 @@ generate_export_header(dolphinvcs BASE_NAME dolphin)
 target_link_libraries(
     dolphinvcs PUBLIC
     Qt5::Widgets
-    KF5::KIOCore
 )
 
 set_target_properties(dolphinvcs PROPERTIES
@@ -143,10 +142,11 @@ target_link_libraries(
     KF5::KIOWidgets
     KF5::KIOFileWidgets
     KF5::Completion
-    KF5::TextEditor
+    KF5::TextWidgets
     KF5::WindowSystem
     KF5::ConfigCore
     KF5::NewStuff
+    KF5::Parts
 )
 
 if(HAVE_BALOO)
@@ -168,7 +168,7 @@ set_target_properties(dolphinprivate PROPERTIES
     SOVERSION ${DOLPHINPRIVATE_SOVERSION}
 )
 
-install(TARGETS dolphinprivate ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS dolphinprivate ${KDE_INSTALL_TARGETS_DEFAULT_ARGS} LIBRARY NAMELINK_SKIP)
 
 ##########################################
 
@@ -381,7 +381,7 @@ install( FILES settings/dolphin_directoryviewpropertysettings.kcfg
                settings/dolphin_versioncontrolsettings.kcfg
          DESTINATION ${KDE_INSTALL_KCFGDIR} )
 install( FILES dolphinui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/dolphin )
-install( FILES dolphin.appdata.xml DESTINATION ${KDE_INSTALL_DATAROOTDIR}/appdata )
+install( FILES org.kde.dolphin.appdata.xml DESTINATION ${KDE_INSTALL_METAINFODIR} )
 install( FILES settings/kcm/kcmdolphinviewmodes.desktop DESTINATION
 ${KDE_INSTALL_KSERVICES5DIR} )
 install( FILES settings/kcm/kcmdolphinnavigation.desktop DESTINATION ${KDE_INSTALL_KSERVICES5DIR} )

@@ -5,7 +5,7 @@ project(Dolphin)
 # KDE Application Version, managed by release script
 set (KDE_APPLICATIONS_VERSION_MAJOR "15")
 set (KDE_APPLICATIONS_VERSION_MINOR "08")
-set (KDE_APPLICATIONS_VERSION_MICRO "0")
+set (KDE_APPLICATIONS_VERSION_MICRO "1")
 set (KDE_APPLICATIONS_VERSION "${KDE_APPLICATIONS_VERSION_MAJOR}.${KDE_APPLICATIONS_VERSION_MINOR}.${KDE_APPLICATIONS_VERSION_MICRO}")
 
 set(QT_MIN_VERSION "5.4.0")
@@ -29,13 +29,13 @@ ecm_setup_version(${KDE_APPLICATIONS_VERSION} VARIABLE_PREFIX DOLPHIN
                   VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/src/dolphin_version.h"
 )
 
-ecm_setup_version(${KDE_APPLICATIONS_VERSION} VARIABLE_PREFIX DOLPHINVCS
+ecm_setup_version("5.0.0" VARIABLE_PREFIX DOLPHINVCS
                   VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/dolphinvcs_version.h"
                   PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/DolphinVcsConfigVersion.cmake"
                   SOVERSION 5
 )
 
-ecm_setup_version(${KDE_APPLICATIONS_VERSION} VARIABLE_PREFIX DOLPHINPRIVATE
+ecm_setup_version("5.0.0" VARIABLE_PREFIX DOLPHINPRIVATE
                   SOVERSION 5
 )
 
@@ -62,11 +62,11 @@ find_package(KF5 ${KF5_MIN_VERSION} REQUIRED COMPONENTS
     Solid
     IconThemes
     Completion
-    TextEditor
+    TextWidgets
     WindowSystem
     Notifications
 )
-find_package(KF5 ${KF5_MIN_VERSION} COMPONENTS
+find_package(KF5 ${KF5_MIN_VERSION} OPTIONAL_COMPONENTS
     Activities
 )
 
