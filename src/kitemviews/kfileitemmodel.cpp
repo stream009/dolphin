@@ -1774,8 +1774,8 @@ int KFileItemModel::sortRoleCompare(const ItemData* a, const ItemData* b, const 
                                 a->values.value("deletionDate").toDateTime();
         const QDateTime dateTimeB =
                                 b->values.value("deletionDate").toDateTime();
-        Q_ASSERT(dataTimeA.isValid());
-        Q_ASSERT(dataTimeB.isValid());
+        Q_ASSERT(dateTimeA.isValid());
+        Q_ASSERT(dateTimeB.isValid());
 
         if (dateTimeA < dateTimeB) {
             result = -1;
