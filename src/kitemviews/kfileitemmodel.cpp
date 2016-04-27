@@ -41,7 +41,6 @@
 KFileItemModel::KFileItemModel(QObject* parent) :
     KItemModelBase("text", parent),
     m_dirLister(0),
-    m_naturalSorting(GeneralSettings::naturalSorting()),
     m_sortDirsFirst(true),
     m_sortRole(NameRole),
     m_sortingProgressPercent(-1),
@@ -58,8 +57,9 @@ KFileItemModel::KFileItemModel(QObject* parent) :
     m_expandedDirs(),
     m_urlsToExpand()
 {
-    m_collator.setCaseSensitivity(Qt::CaseInsensitive);
     m_collator.setNumericMode(true);
+
+    loadSortingSettings();
 
     m_dirLister = new KFileItemModelDirLister(this);
     m_dirLister->setDelayedMimeTypes(true);
@@ -106,14 +106,13 @@ KFileItemModel::KFileItemModel(QObject* parent) :
     m_resortAllItemsTimer->setSingleShot(true);
     connect(m_resortAllItemsTimer, &QTimer::timeout, this, &KFileItemModel::resortAllItems);
 
-    connect(GeneralSettings::self(), &GeneralSettings::naturalSortingChanged,
-            this, &KFileItemModel::slotNaturalSortingChanged);
+    connect(GeneralSettings::self(), &GeneralSettings::sortingChoiceChanged, this, &KFileItemModel::slotSortingChoiceChanged);
 }
 
 KFileItemModel::~KFileItemModel()
 {
     qDeleteAll(m_itemData);
-    qDeleteAll(m_filteredItems.values());
+    qDeleteAll(m_filteredItems);
     qDeleteAll(m_pendingItemsToInsert);
 }
 
@@ -250,7 +249,7 @@ QMimeData* KFileItemModel::createMimeData(const KItemSet& indexes) const
     bool canUseMostLocalUrls = true;
     const ItemData* lastAddedItem = 0;
 
-    foreach (int index, indexes) {
+    for (int index : indexes) {
         const ItemData* itemData = m_itemData.at(index);
         const ItemData* parent = itemData->parent;
 
@@ -786,6 +785,27 @@ void KFileItemModel::onSortOrderChanged(Qt::SortOrder current, Qt::SortOrder pre
     resortAllItems();
 }
 
+void KFileItemModel::loadSortingSettings()
+{
+    using Choice = GeneralSettings::EnumSortingChoice;
+    switch (GeneralSettings::sortingChoice()) {
+    case Choice::NaturalSorting:
+        m_naturalSorting = true;
+        m_collator.setCaseSensitivity(Qt::CaseInsensitive);
+        break;
+    case Choice::CaseSensitiveSorting:
+        m_naturalSorting = false;
+        m_collator.setCaseSensitivity(Qt::CaseSensitive);
+        break;
+    case Choice::CaseInsensitiveSorting:
+        m_naturalSorting = false;
+        m_collator.setCaseSensitivity(Qt::CaseInsensitive);
+        break;
+    default:
+        Q_UNREACHABLE();
+    }
+}
+
 void KFileItemModel::resortAllItems()
 {
     m_resortAllItemsTimer->stop();
@@ -1085,7 +1105,7 @@ void KFileItemModel::slotClear()
     qCDebug(DolphinDebug) << "Clearing all items";
 #endif
 
-    qDeleteAll(m_filteredItems.values());
+    qDeleteAll(m_filteredItems);
     m_filteredItems.clear();
     m_groups.clear();
 
@@ -1106,9 +1126,9 @@ void KFileItemModel::slotClear()
     m_expandedDirs.clear();
 }
 
-void KFileItemModel::slotNaturalSortingChanged()
+void KFileItemModel::slotSortingChoiceChanged()
 {
-    m_naturalSorting = GeneralSettings::naturalSorting();
+    loadSortingSettings();
     resortAllItems();
 }
 
@@ -1534,7 +1554,7 @@ QHash<QByteArray, QVariant> KFileItemModel::retrieveData(const KFileItem& item, 
     if (m_requestRole[DestinationRole]) {
         QString destination = item.linkDest();
         if (destination.isEmpty()) {
-            destination = QLatin1String("-");
+            destination = QStringLiteral("-");
         }
         data.insert(sharedValue("destination"), destination);
     }
@@ -1669,6 +1689,16 @@ public:
         m_collator.setIgnorePunctuation(other.m_collator.ignorePunctuation());
         m_collator.setLocale(other.m_collator.locale());
         m_collator.setNumericMode(other.m_collator.numericMode());
+    }
+
+    ~KFileItemModelLessThan() = default;
+    //We do not delete m_model as the pointer was passed from outside ant it will be deleted elsewhere.
+
+    KFileItemModelLessThan& operator=(const KFileItemModelLessThan& other)
+    {
+        m_model = other.m_model;
+        m_collator = other.m_collator;
+        return *this;
     }
 
     bool operator()(const KFileItemModel::ItemData* a, const KFileItemModel::ItemData* b) const
@@ -1866,13 +1896,14 @@ QList<QPair<int, QVariant> > KFileItemModel::nameRoleGroups() const
             if (newFirstChar.isLetter()) {
                 // Try to find a matching group in the range 'A' to 'Z'.
                 static std::vector<QChar> lettersAtoZ;
+                lettersAtoZ.reserve('Z' - 'A' + 1);
                 if (lettersAtoZ.empty()) {
                     for (char c = 'A'; c <= 'Z'; ++c) {
                         lettersAtoZ.push_back(QLatin1Char(c));
                     }
                 }
 
-                auto localeAwareLessThan = [this](const QChar& c1, const QChar& c2) -> bool {
+                auto localeAwareLessThan = [this](QChar c1, QChar c2) -> bool {
                     return m_collator.compare(c1, c2) < 0;
                 };
 
@@ -2250,7 +2281,7 @@ const KFileItemModel::RoleInfoMap* KFileItemModel::rolesInfoMap(int& count)
         { "track",       TrackRole,       I18N_NOOP2_NOSTRIP("@label", "Track"),            I18N_NOOP2_NOSTRIP("@label", "Audio"),    true,  true  },
         { "path",        PathRole,        I18N_NOOP2_NOSTRIP("@label", "Path"),             I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "destination", DestinationRole, I18N_NOOP2_NOSTRIP("@label", "Link Destination"), I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
-        { "copiedFrom",  CopiedFromRole,  I18N_NOOP2_NOSTRIP("@label", "Copied From"),      I18N_NOOP2_NOSTRIP("@label", "Other"),    true,  false },
+        { "originUrl",   OriginUrlRole,   I18N_NOOP2_NOSTRIP("@label", "Downloaded From"),  I18N_NOOP2_NOSTRIP("@label", "Other"),    true,  false },
         { "permissions", PermissionsRole, I18N_NOOP2_NOSTRIP("@label", "Permissions"),      I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "owner",       OwnerRole,       I18N_NOOP2_NOSTRIP("@label", "Owner"),            I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "group",       GroupRole,       I18N_NOOP2_NOSTRIP("@label", "User Group"),       I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },

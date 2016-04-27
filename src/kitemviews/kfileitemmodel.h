@@ -274,7 +274,7 @@ private slots:
     void slotItemsDeleted(const KFileItemList& items);
     void slotRefreshItems(const QList<QPair<KFileItem, KFileItem> >& items);
     void slotClear();
-    void slotNaturalSortingChanged();
+    void slotSortingChoiceChanged();
 
     void dispatchPendingItemsToInsert();
 
@@ -286,7 +286,7 @@ private:
         // User visible roles available with Baloo:
         CommentRole, TagsRole, RatingRole, ImageSizeRole, OrientationRole,
         WordCountRole, LineCountRole, ArtistRole, AlbumRole, DurationRole, TrackRole,
-        CopiedFromRole,
+        OriginUrlRole,
         // Non-visible roles:
         IsDirRole, IsLinkRole, IsExpandedRole, IsExpandableRole, ExpandedParentsCountRole,
         // Mandatory last entry:
@@ -415,6 +415,11 @@ private:
      * or collapsed via setExpanded(parentIndex, false).
      */
     void removeFilteredChildren(const KItemRangeList& parents);
+
+    /**
+     * Loads the selected choice of sorting method from Dolphin General Settings
+     */
+    void loadSortingSettings();
 
     /**
      * Maps the QByteArray-roles to RoleTypes and provides translation- and

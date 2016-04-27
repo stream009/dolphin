@@ -3,13 +3,13 @@ cmake_minimum_required(VERSION 2.8.12)
 project(Dolphin)
 
 # KDE Application Version, managed by release script
-set (KDE_APPLICATIONS_VERSION_MAJOR "15")
-set (KDE_APPLICATIONS_VERSION_MINOR "12")
-set (KDE_APPLICATIONS_VERSION_MICRO "3")
+set (KDE_APPLICATIONS_VERSION_MAJOR "16")
+set (KDE_APPLICATIONS_VERSION_MINOR "03")
+set (KDE_APPLICATIONS_VERSION_MICRO "80")
 set (KDE_APPLICATIONS_VERSION "${KDE_APPLICATIONS_VERSION_MAJOR}.${KDE_APPLICATIONS_VERSION_MINOR}.${KDE_APPLICATIONS_VERSION_MICRO}")
 
 set(QT_MIN_VERSION "5.4.0")
-set(KF5_MIN_VERSION "5.16.0")
+set(KF5_MIN_VERSION "5.19.0")
 set(ECM_MIN_VERSION "1.6.0")
 
 # ECM setup
@@ -23,7 +23,7 @@ include(GenerateExportHeader)
 include(FeatureSummary)
 include(KDEInstallDirs)
 include(KDECMakeSettings)
-include(KDEFrameworkCompilerSettings)
+include(KDEFrameworkCompilerSettings NO_POLICY_SCOPE)
 
 ecm_setup_version(${KDE_APPLICATIONS_VERSION} VARIABLE_PREFIX DOLPHIN
                   VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/src/dolphin_version.h"
@@ -86,7 +86,7 @@ set_package_properties(KF5BalooWidgets PROPERTIES DESCRIPTION "Baloos Widgets"
                        TYPE OPTIONAL
                       )
 
-find_package(KF5FileMetaData 4.97)
+find_package(KF5FileMetaData 5.19.0)
 set_package_properties(KF5FileMetaData PROPERTIES
                        URL "https://projects.kde.org/kfilemetadata"
                        TYPE OPTIONAL
