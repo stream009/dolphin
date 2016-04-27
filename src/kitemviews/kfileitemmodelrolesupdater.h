@@ -36,6 +36,7 @@ class KDirectoryContentsCounter;
 class KFileItemModel;
 class QPixmap;
 class QTimer;
+class KOverlayIconPlugin;
 
 namespace KIO {
     class PreviewJob;
@@ -46,6 +47,7 @@ namespace KIO {
     {
         class FileMonitor;
     }
+    #include <Baloo/IndexerConfig>
 #endif
 
 /**
@@ -181,6 +183,11 @@ private slots:
      * @see startPreviewJob()
      */
     void slotPreviewJobFinished();
+
+    /**
+     * Is invoked when one of the KOverlayIconPlugin emit the signal that an overlay has changed
+     */
+    void slotOverlaysChanged(const QUrl& url, const QStringList&);
 
     /**
      * Resolves the sort role of the next item in m_pendingSortRole, applies it
@@ -333,8 +340,11 @@ private:
 
     KDirectoryContentsCounter* m_directoryContentsCounter;
 
+    QList<KOverlayIconPlugin*> m_overlayIconsPlugin;
+
 #ifdef HAVE_BALOO
     Baloo::FileMonitor* m_balooFileMonitor;
+    Baloo::IndexerConfig m_balooConfig;
 #endif
 };
 
