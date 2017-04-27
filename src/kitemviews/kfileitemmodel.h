@@ -384,11 +384,7 @@ private:
 
     QList<QPair<int, QVariant> > nameRoleGroups() const;
     QList<QPair<int, QVariant> > sizeRoleGroups() const;
-<<<<<<< HEAD
-    QList<QPair<int, QVariant> > dateRoleGroups(const RoleType) const;
-=======
-    QList<QPair<int, QVariant> > timeRoleGroups(KFileItem::FileTimes which) const;
->>>>>>> v17.04.0
+    QList<QPair<int, QVariant> > timeRoleGroups(RoleType const) const;
     QList<QPair<int, QVariant> > permissionRoleGroups() const;
     QList<QPair<int, QVariant> > ratingRoleGroups() const;
     QList<QPair<int, QVariant> > genericStringRoleGroups(const QByteArray& typeForRole) const;
