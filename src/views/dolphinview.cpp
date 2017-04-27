@@ -29,6 +29,7 @@
 #include <QGraphicsSceneDragDropEvent>
 #include <QTimer>
 #include <QScrollBar>
+#include <QPixmapCache>
 #include <QPointer>
 #include <QMenu>
 #include <QVBoxLayout>
@@ -74,10 +75,6 @@
     #include <Baloo/IndexerConfig>
 #endif
 #include <KFormat>
-
-namespace {
-    const int MaxModeEnum = DolphinView::CompactView;
-};
 
 DolphinView::DolphinView(const QUrl& url, QWidget* parent) :
     QWidget(parent),
@@ -177,8 +174,8 @@ DolphinView::DolphinView(const QUrl& url, QWidget* parent) :
             this, &DolphinView::slotVisibleRolesChangedByHeader);
     connect(m_view, &DolphinItemListView::roleEditingCanceled,
             this, &DolphinView::slotRoleEditingCanceled);
-    connect(m_view->header(), &KItemListHeader::columnWidthChanged,
-            this, &DolphinView::slotHeaderColumnWidthChanged);
+    connect(m_view->header(), &KItemListHeader::columnWidthChangeFinished,
+            this, &DolphinView::slotHeaderColumnWidthChangeFinished);
 
     KItemListSelectionManager* selectionManager = controller->selectionManager();
     connect(selectionManager, &KItemListSelectionManager::selectionChanged,
@@ -215,19 +212,7 @@ void DolphinView::setActive(bool active)
 
     m_active = active;
 
-    QColor color = KColorScheme(QPalette::Active, KColorScheme::View).background().color();
-    if (!active) {
-        color.setAlpha(150);
-    }
-
-    QWidget* viewport = m_container->viewport();
-    if (viewport) {
-        QPalette palette;
-        palette.setColor(viewport->backgroundRole(), color);
-        viewport->setPalette(palette);
-    }
-
-    update();
+    updatePalette();
 
     if (active) {
         m_container->setFocus();
@@ -349,7 +334,9 @@ KFileItemList DolphinView::selectedItems() const
     const KItemListSelectionManager* selectionManager = m_container->controller()->selectionManager();
 
     KFileItemList selectedItems;
-    foreach (int index, selectionManager->selectedItems()) {
+    const auto items = selectionManager->selectedItems();
+    selectedItems.reserve(items.count());
+    for (int index : items) {
         selectedItems.append(m_model->fileItem(index));
     }
     return selectedItems;
@@ -466,10 +453,6 @@ void DolphinView::reload()
     QByteArray viewState;
     QDataStream saveStream(&viewState, QIODevice::WriteOnly);
     saveState(saveStream);
-
-    const KFileItemList itemList = selectedItems();
-    m_selectedUrls.clear();
-    m_selectedUrls = itemList.urlList();
 
     setUrl(url());
     loadDirectory(url(), true);
@@ -598,7 +581,6 @@ void DolphinView::setUrl(const QUrl& url)
 
     clearSelection();
 
-    emit urlAboutToBeChanged(url);
     m_url = url;
 
     hideToolTip();
@@ -671,7 +653,7 @@ void DolphinView::trashSelectedItems()
     uiDelegate.setWindow(window());
     if (uiDelegate.askDeleteConfirmation(list, KIO::JobUiDelegate::Trash, KIO::JobUiDelegate::DefaultConfirmation)) {
         KIO::Job* job = KIO::trash(list);
-        KIO::FileUndoManager::self()->recordJob(KIO::FileUndoManager::Trash, list, QUrl("trash:/"), job);
+        KIO::FileUndoManager::self()->recordJob(KIO::FileUndoManager::Trash, list, QUrl(QStringLiteral("trash:/")), job);
         KJobWidgets::setWindow(job, this);
         connect(job, &KIO::Job::result,
                 this, &DolphinView::slotTrashFileFinished);
@@ -723,9 +705,40 @@ void DolphinView::stopLoading()
     m_model->cancelDirectoryLoading();
 }
 
+void DolphinView::updatePalette()
+{
+    QColor color = KColorScheme(QPalette::Active, KColorScheme::View).background().color();
+    if (!m_active) {
+        color.setAlpha(150);
+    }
+
+    QWidget* viewport = m_container->viewport();
+    if (viewport) {
+        QPalette palette;
+        palette.setColor(viewport->backgroundRole(), color);
+        viewport->setPalette(palette);
+    }
+
+    update();
+}
+
 bool DolphinView::eventFilter(QObject* watched, QEvent* event)
 {
     switch (event->type()) {
+    case QEvent::PaletteChange:
+        updatePalette();
+        QPixmapCache::clear();
+        break;
+
+    case QEvent::KeyPress:
+        if (GeneralSettings::useTabForSwitchingSplitView()) {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Tab && keyEvent->modifiers() == Qt::NoModifier) {
+                toggleActiveViewRequested();
+                return true;
+            }
+        }
+        break;
     case QEvent::FocusIn:
         if (watched == m_container) {
             setActive(true);
@@ -816,7 +829,7 @@ void DolphinView::slotItemsActivated(const KItemSet& indexes)
     KFileItemList items;
     items.reserve(indexes.count());
 
-    foreach (int index, indexes) {
+    for (int index : indexes) {
         KFileItem item = m_model->fileItem(index);
         const QUrl& url = openItemAsFolderUrl(item);
 
@@ -939,6 +952,7 @@ void DolphinView::slotHeaderContextMenuRequested(const QPointF& pos)
             // Apply the current column-widths as custom column-widths and turn
             // off the automatic resizing of the columns
             QList<int> columnWidths;
+            columnWidths.reserve(view->visibleRoles().count());
             foreach (const QByteArray& role, view->visibleRoles()) {
                 columnWidths.append(header->columnWidth(role));
             }
@@ -960,6 +974,7 @@ void DolphinView::slotHeaderContextMenuRequested(const QPointF& pos)
 
             QList<int> columnWidths;
             if (!header->automaticColumnResizing()) {
+                columnWidths.reserve(view->visibleRoles().count());
                 foreach (const QByteArray& role, view->visibleRoles()) {
                     columnWidths.append(header->columnWidth(role));
                 }
@@ -971,10 +986,8 @@ void DolphinView::slotHeaderContextMenuRequested(const QPointF& pos)
     delete menu;
 }
 
-void DolphinView::slotHeaderColumnWidthChanged(const QByteArray& role, qreal current, qreal previous)
+void DolphinView::slotHeaderColumnWidthChangeFinished(const QByteArray& role, qreal current)
 {
-    Q_UNUSED(previous);
-
     const QList<QByteArray> visibleRoles = m_view->visibleRoles();
 
     ViewProperties props(viewPropertiesUrl());
@@ -1005,7 +1018,7 @@ void DolphinView::slotItemHovered(int index)
         const QPoint pos = m_container->mapToGlobal(itemRect.topLeft().toPoint());
         itemRect.moveTo(pos);
 
-        m_toolTipManager->showToolTip(item, itemRect);
+        m_toolTipManager->showToolTip(item, itemRect, nativeParentWidget()->windowHandle());
     }
 
     emit requestItemInfo(item);
@@ -1029,7 +1042,7 @@ void DolphinView::slotItemDropEvent(int index, QGraphicsSceneDragDropEvent* even
         destUrl = url();
     } else {
         // The item represents a directory or desktop-file
-        destUrl = destItem.url();
+        destUrl = destItem.mostLocalUrl();
     }
 
     QDropEvent dropEvent(event->pos().toPoint(),
@@ -1194,6 +1207,9 @@ void DolphinView::restoreState(QDataStream& stream)
     // Restore the current item that had the keyboard focus
     stream >> m_currentItemUrl;
 
+    // Restore the previously selected items
+    stream >> m_selectedUrls;
+
     // Restore the view position
     stream >> m_restoredContentsPosition;
 
@@ -1217,6 +1233,9 @@ void DolphinView::saveState(QDataStream& stream)
     } else {
         stream << QUrl();
     }
+
+    // Save the selected urls
+    stream << selectedItems().urlList();
 
     // Save view position
     const qreal x = m_container->horizontalScrollBar()->value();
@@ -1276,7 +1295,7 @@ QUrl DolphinView::openItemAsFolderUrl(const KFileItem& item, const bool browseTh
             if (desktopFile.hasLinkType()) {
                 const QString linkUrl = desktopFile.readUrl();
                 if (!linkUrl.startsWith(QLatin1String("http"))) {
-                    return linkUrl;
+                    return QUrl::fromUserInput(linkUrl);
                 }
             }
         }
@@ -1352,6 +1371,7 @@ void DolphinView::updateViewState()
             }
         }
 
+        selectionManager->beginAnchoredSelection(selectionManager->currentItem());
         selectionManager->setSelectedItems(selectedItems);
     }
 }
@@ -1406,7 +1426,7 @@ void DolphinView::slotRenamingResult(KJob* job)
         const int index = m_model->index(newUrl);
         if (index >= 0) {
             QHash<QByteArray, QVariant> data;
-            const QUrl oldUrl = copyJob->srcUrls().first();
+            const QUrl oldUrl = copyJob->srcUrls().at(0);
             data.insert("text", oldUrl.fileName());
             m_model->setData(index, data);
         }
@@ -1429,7 +1449,7 @@ void DolphinView::slotDirectoryLoadingCompleted()
 {
     // Update the view-state. This has to be done asynchronously
     // because the view might not be in its final state yet.
-    QTimer::singleShot(0, this, SLOT(updateViewState()));
+    QTimer::singleShot(0, this, &DolphinView::updateViewState);
 
     emit directoryLoadingCompleted();
 
@@ -1518,7 +1538,7 @@ void DolphinView::slotRoleEditingFinished(int index, const QByteArray& role, con
             KIO::Job * job = KIO::moveAs(oldUrl, newUrl);
             KJobWidgets::setWindow(job, this);
             KIO::FileUndoManager::self()->recordJob(KIO::FileUndoManager::Rename, {oldUrl}, newUrl, job);
-            job->ui()->setAutoErrorHandlingEnabled(true);
+            job->uiDelegate()->setAutoErrorHandlingEnabled(true);
 
             if (!newNameExistsAlready) {
                 // Only connect the result signal if there is no item with the new name
@@ -1673,6 +1693,7 @@ QList<QUrl> DolphinView::simplifiedSelectedUrls() const
     QList<QUrl> urls;
 
     const KFileItemList items = selectedItems();
+    urls.reserve(items.count());
     foreach (const KFileItem& item, items) {
         urls.append(item.url());
     }

@@ -26,6 +26,7 @@
 #include <QLineEdit>
 #include <KLocalizedString>
 #include <KSeparator>
+#include <KNS3/KMoreToolsMenuFactory>
 
 #include <QButtonGroup>
 #include <QDir>
@@ -91,7 +92,7 @@ void DolphinSearchBox::setSearchPath(const QUrl& url)
     QString location = url.fileName();
     if (location.isEmpty()) {
         if (url.isLocalFile()) {
-            location = QLatin1String("/");
+            location = QStringLiteral("/");
         } else {
             location = url.scheme() + QLatin1String(" - ") + url.host();
         }
@@ -129,12 +130,12 @@ QUrl DolphinSearchBox::urlForSearching() const
     if (useBalooSearch) {
         url = balooUrlForSearching();
     } else {
-        url.setScheme("filenamesearch");
+        url.setScheme(QStringLiteral("filenamesearch"));
 
         QUrlQuery query;
-        query.addQueryItem("search", m_searchInput->text());
+        query.addQueryItem(QStringLiteral("search"), m_searchInput->text());
         if (m_contentButton->isChecked()) {
-            query.addQueryItem("checkContent", "yes");
+            query.addQueryItem(QStringLiteral("checkContent"), QStringLiteral("yes"));
         }
 
         QString encodedUrl;
@@ -146,7 +147,7 @@ QUrl DolphinSearchBox::urlForSearching() const
         } else {
             encodedUrl = m_searchPath.url();
         }
-        query.addQueryItem("url", encodedUrl);
+        query.addQueryItem(QStringLiteral("url"), encodedUrl);
 
         url.setQuery(query);
     }
@@ -156,13 +157,13 @@ QUrl DolphinSearchBox::urlForSearching() const
 
 void DolphinSearchBox::fromSearchUrl(const QUrl& url)
 {
-    if (url.scheme() == "baloosearch") {
+    if (url.scheme() == QLatin1String("baloosearch")) {
         fromBalooSearchUrl(url);
-    } else if (url.scheme() == "filenamesearch") {
+    } else if (url.scheme() == QLatin1String("filenamesearch")) {
         const QUrlQuery query(url);
-        setText(query.queryItemValue("search"));
-        setSearchPath(QUrl::fromUserInput(query.queryItemValue("url"), QString(), QUrl::AssumeLocalFile));
-        m_contentButton->setChecked(query.queryItemValue("checkContent") == "yes");
+        setText(query.queryItemValue(QStringLiteral("search")));
+        setSearchPath(QUrl::fromUserInput(query.queryItemValue(QStringLiteral("url")), QString(), QUrl::AssumeLocalFile));
+        m_contentButton->setChecked(query.queryItemValue(QStringLiteral("checkContent")) == QLatin1String("yes"));
     } else {
         setText(QString());
         setSearchPath(url);
@@ -204,6 +205,13 @@ void DolphinSearchBox::showEvent(QShowEvent* event)
         m_searchInput->setFocus();
         m_startedSearching = false;
     }
+}
+
+void DolphinSearchBox::hideEvent(QHideEvent* event)
+{
+    Q_UNUSED(event);
+    m_startedSearching = false;
+    m_startSearchTimer->stop();
 }
 
 void DolphinSearchBox::keyReleaseEvent(QKeyEvent* event)
@@ -314,8 +322,8 @@ void DolphinSearchBox::loadSettings()
 
 void DolphinSearchBox::saveSettings()
 {
-    SearchSettings::setLocation(m_fromHereButton->isChecked() ? "FromHere" : "Everywhere");
-    SearchSettings::setWhat(m_fileNameButton->isChecked() ? "FileName" : "Content");
+    SearchSettings::setLocation(m_fromHereButton->isChecked() ? QStringLiteral("FromHere") : QStringLiteral("Everywhere"));
+    SearchSettings::setWhat(m_fileNameButton->isChecked() ? QStringLiteral("FileName") : QStringLiteral("Content"));
     SearchSettings::setShowFacetsWidget(m_facetsToggleButton->isChecked());
     SearchSettings::self()->save();
 }
@@ -325,7 +333,7 @@ void DolphinSearchBox::init()
     // Create close button
     QToolButton* closeButton = new QToolButton(this);
     closeButton->setAutoRaise(true);
-    closeButton->setIcon(QIcon::fromTheme("dialog-close"));
+    closeButton->setIcon(QIcon::fromTheme(QStringLiteral("dialog-close")));
     closeButton->setToolTip(i18nc("@info:tooltip", "Quit searching"));
     connect(closeButton, &QToolButton::clicked, this, &DolphinSearchBox::emitCloseRequest);
 
@@ -378,6 +386,20 @@ void DolphinSearchBox::init()
     searchLocationGroup->addButton(m_fromHereButton);
     searchLocationGroup->addButton(m_everywhereButton);
 
+    auto moreSearchToolsButton = new QToolButton(this);
+    moreSearchToolsButton->setAutoRaise(true);
+    moreSearchToolsButton->setPopupMode(QToolButton::InstantPopup);
+    moreSearchToolsButton->setIcon(QIcon::fromTheme("arrow-down-double"));
+    moreSearchToolsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    moreSearchToolsButton->setText(i18n("More Search Tools"));
+    moreSearchToolsButton->setMenu(new QMenu(this));
+    connect(moreSearchToolsButton->menu(), &QMenu::aboutToShow, moreSearchToolsButton->menu(), [this, moreSearchToolsButton]()
+    {
+        m_menuFactory.reset(new KMoreToolsMenuFactory("dolphin/search-tools"));
+        moreSearchToolsButton->menu()->clear();
+        m_menuFactory->fillMenuFromGroupingNames(moreSearchToolsButton->menu(), { "files-find" }, this->m_searchPath);
+    } );
+
     // Create "Facets" widgets
     m_facetsToggleButton = new QToolButton(this);
     m_facetsToggleButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -397,8 +419,10 @@ void DolphinSearchBox::init()
     optionsLayout->addWidget(m_separator);
     optionsLayout->addWidget(m_fromHereButton);
     optionsLayout->addWidget(m_everywhereButton);
-    optionsLayout->addStretch(1);
+    optionsLayout->addWidget(new KSeparator(Qt::Vertical, this));
     optionsLayout->addWidget(m_facetsToggleButton);
+    optionsLayout->addWidget(moreSearchToolsButton);
+    optionsLayout->addStretch(1);
 
     // Put the options into a QScrollArea. This prevents increasing the view width
     // in case that not enough width for the options is available.
@@ -449,14 +473,14 @@ QUrl DolphinSearchBox::balooUrlForSearching() const
     if (m_contentButton->isChecked()) {
         queryStrings << text;
     } else if (!text.isEmpty()) {
-        queryStrings << QString::fromLatin1("filename:\"%1\"").arg(text);
+        queryStrings << QStringLiteral("filename:\"%1\"").arg(text);
     }
 
     if (m_fromHereButton->isChecked()) {
         query.setIncludeFolder(m_searchPath.toLocalFile());
     }
 
-    query.setSearchString(queryStrings.join(" "));
+    query.setSearchString(queryStrings.join(QStringLiteral(" ")));
 
     return query.toSearchUrl(i18nc("@title UDS_DISPLAY_NAME for a KIO directory listing. %1 is the query the user entered.",
                                    "Query Results from '%1'", text));
@@ -478,7 +502,7 @@ void DolphinSearchBox::fromBalooSearchUrl(const QUrl& url)
     if (!customDir.isEmpty()) {
         setSearchPath(QUrl::fromLocalFile(customDir));
     } else {
-        setSearchPath(QDir::homePath());
+        setSearchPath(QUrl::fromLocalFile(QDir::homePath()));
     }
 
     setText(query.searchString());
@@ -490,7 +514,7 @@ void DolphinSearchBox::fromBalooSearchUrl(const QUrl& url)
 
     const QStringList subTerms = query.searchString().split(' ', QString::SkipEmptyParts);
     foreach (const QString& subTerm, subTerms) {
-        if (subTerm.startsWith("filename:")) {
+        if (subTerm.startsWith(QLatin1String("filename:"))) {
             const QString value = subTerm.mid(9);
             setText(value);
         } else if (m_facetsWidget->isRatingTerm(subTerm)) {
@@ -509,7 +533,7 @@ void DolphinSearchBox::updateFacetsToggleButton()
 {
     const bool facetsIsVisible = SearchSettings::showFacetsWidget();
     m_facetsToggleButton->setChecked(facetsIsVisible ? true : false);
-    m_facetsToggleButton->setIcon(QIcon::fromTheme(facetsIsVisible ? "arrow-up-double" : "arrow-down-double"));
+    m_facetsToggleButton->setIcon(QIcon::fromTheme(facetsIsVisible ? QStringLiteral("arrow-up-double") : QStringLiteral("arrow-down-double")));
     m_facetsToggleButton->setText(facetsIsVisible ? i18nc("action:button", "Fewer Options") : i18nc("action:button", "More Options"));
 }
 

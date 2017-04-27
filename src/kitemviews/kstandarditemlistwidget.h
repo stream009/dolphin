@@ -104,7 +104,7 @@ public:
     void setSupportsItemExpanding(bool supportsItemExpanding);
     bool supportsItemExpanding() const;
 
-    virtual void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = 0);
+    virtual void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = 0) override;
 
     virtual QRectF iconRect() const Q_DECL_OVERRIDE;
     virtual QRectF textRect() const Q_DECL_OVERRIDE;
@@ -183,6 +183,7 @@ protected:
     virtual void resizeEvent(QGraphicsSceneResizeEvent* event) Q_DECL_OVERRIDE;
     virtual void showEvent(QShowEvent* event) Q_DECL_OVERRIDE;
     virtual void hideEvent(QHideEvent* event) Q_DECL_OVERRIDE;
+    bool event(QEvent *event) Q_DECL_OVERRIDE;
 
 private slots:
     void slotCutItemsChanged();
@@ -212,7 +213,7 @@ private:
      */
     void closeRoleEditor();
 
-    static QPixmap pixmapForIcon(const QString& name, const QStringList& overlays, int size);
+    static QPixmap pixmapForIcon(const QString& name, const QStringList& overlays, int size, QIcon::Mode mode);
 
     /**
      * @return Preferred size of the rating-image based on the given

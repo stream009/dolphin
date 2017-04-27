@@ -32,17 +32,19 @@ namespace {
  // Empty titlebar for the dock widgets when "Lock Layout" has been activated.
 class DolphinDockTitleBar : public QWidget
 {
+    Q_OBJECT
+
 public:
     DolphinDockTitleBar(QWidget* parent = 0) : QWidget(parent) {}
     virtual ~DolphinDockTitleBar() {}
 
-    virtual QSize minimumSizeHint() const
+    QSize minimumSizeHint() const Q_DECL_OVERRIDE
     {
         const int border = style()->pixelMetric(QStyle::PM_DockWidgetTitleBarButtonMargin);
         return QSize(border, border);
     }
 
-    virtual QSize sizeHint() const
+    QSize sizeHint() const Q_DECL_OVERRIDE
     {
         return minimumSizeHint();
     }
@@ -91,3 +93,4 @@ bool DolphinDockWidget::isLocked() const
     return m_locked;
 }
 
+#include "dolphindockwidget.moc"

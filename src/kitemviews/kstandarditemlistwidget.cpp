@@ -684,7 +684,7 @@ void KStandardItemListWidget::dataChanged(const QHash<QByteArray, QVariant>& cur
     // The URL might have changed (i.e., if the sort order of the items has
     // been changed). Therefore, the "is cut" state must be updated.
     KFileItemClipboard* clipboard = KFileItemClipboard::instance();
-    const QUrl itemUrl = data().value("url").value<QUrl>();
+    const QUrl itemUrl = data().value("url").toUrl();
     m_isCut = clipboard->isCut(itemUrl);
 
     // The icon-state might depend from other roles and hence is
@@ -835,7 +835,7 @@ void KStandardItemListWidget::showEvent(QShowEvent* event)
     // Listen to changes of the clipboard to mark the item as cut/uncut
     KFileItemClipboard* clipboard = KFileItemClipboard::instance();
 
-    const QUrl itemUrl = data().value("url").value<QUrl>();
+    const QUrl itemUrl = data().value("url").toUrl();
     m_isCut = clipboard->isCut(itemUrl);
 
     connect(clipboard, &KFileItemClipboard::cutItemsChanged,
@@ -850,9 +850,19 @@ void KStandardItemListWidget::hideEvent(QHideEvent* event)
     KItemListWidget::hideEvent(event);
 }
 
+bool KStandardItemListWidget::event(QEvent *event)
+{
+    if (event->type() == QEvent::WindowDeactivate || event->type() == QEvent::WindowActivate
+            || event->type() == QEvent::PaletteChange) {
+        m_dirtyContent = true;
+    }
+
+    return KItemListWidget::event(event);
+}
+
 void KStandardItemListWidget::slotCutItemsChanged()
 {
-    const QUrl itemUrl = data().value("url").value<QUrl>();
+    const QUrl itemUrl = data().value("url").toUrl();
     const bool isCut = KFileItemClipboard::instance()->isCut(itemUrl);
     if (m_isCut != isCut) {
         m_isCut = isCut;
@@ -951,10 +961,10 @@ void KStandardItemListWidget::updatePixmapCache()
             if (iconName.isEmpty()) {
                 // The icon-name has not been not resolved by KFileItemModelRolesUpdater,
                 // use a generic icon as fallback
-                iconName = QLatin1String("unknown");
+                iconName = QStringLiteral("unknown");
             }
             const QStringList overlays = values["iconOverlays"].toStringList();
-            m_pixmap = pixmapForIcon(iconName, overlays, maxIconHeight);
+            m_pixmap = pixmapForIcon(iconName, overlays, maxIconHeight, isSelected() && isActiveWindow() ? QIcon::Selected : QIcon::Normal);
 
         } else if (m_pixmap.width() / m_pixmap.devicePixelRatio() != maxIconWidth || m_pixmap.height() / m_pixmap.devicePixelRatio() != maxIconHeight) {
             // A custom pixmap has been applied. Assure that the pixmap
@@ -1390,7 +1400,7 @@ void KStandardItemListWidget::drawSiblingsInformation(QPainter* painter)
             if (m_isExpandable) {
                 option.state |= QStyle::State_Children;
             }
-            if (data()["isExpanded"].toBool()) {
+            if (data().value("isExpanded").toBool()) {
                 option.state |= QStyle::State_Open;
             }
             isItemSibling = false;
@@ -1438,14 +1448,15 @@ void KStandardItemListWidget::closeRoleEditor()
     m_roleEditor = 0;
 }
 
-QPixmap KStandardItemListWidget::pixmapForIcon(const QString& name, const QStringList& overlays, int size)
+QPixmap KStandardItemListWidget::pixmapForIcon(const QString& name, const QStringList& overlays, int size, QIcon::Mode mode)
 {
+    static const QIcon fallbackIcon = QIcon::fromTheme(QStringLiteral("unknown"));
     size *= qApp->devicePixelRatio();
-    const QString key = "KStandardItemListWidget:" % name % ":" % overlays.join(":") % ":" % QString::number(size);
+    const QString key = "KStandardItemListWidget:" % name % ":" % overlays.join(QStringLiteral(":")) % ":" % QString::number(size) % ":" % QString::number(mode);
     QPixmap pixmap;
 
     if (!QPixmapCache::find(key, pixmap)) {
-        const QIcon icon = QIcon::fromTheme(name);
+        const QIcon icon = QIcon::fromTheme(name, fallbackIcon);
 
         int requestedSize;
         if (size <= KIconLoader::SizeSmall) {
@@ -1466,7 +1477,7 @@ QPixmap KStandardItemListWidget::pixmapForIcon(const QString& name, const QStrin
             requestedSize = size;
         }
 
-        pixmap = icon.pixmap(requestedSize / qApp->devicePixelRatio(), requestedSize / qApp->devicePixelRatio());
+        pixmap = icon.pixmap(requestedSize / qApp->devicePixelRatio(), requestedSize / qApp->devicePixelRatio(), mode);
         if (requestedSize != size) {
             KPixmapModifier::scale(pixmap, QSize(size, size));
         }

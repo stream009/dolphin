@@ -378,13 +378,6 @@ signals:
      */
     void activated();
 
-    /**
-     * Is emitted if the URL of the view will be changed to \a url.
-     * After the URL has been changed the signal urlChanged() will
-     * be emitted.
-     */
-    void urlAboutToBeChanged(const QUrl& url);
-
     /** Is emitted if the URL of the view has been changed to \a url. */
     void urlChanged(const QUrl& url);
 
@@ -546,6 +539,11 @@ signals:
      */
     void goForwardRequested();
 
+    /**
+     * Is emitted when the user wants to move the focus to another view.
+     */
+    void toggleActiveViewRequested();
+
 protected:
     /** Changes the zoom level if Control is pressed during a wheel event. */
     virtual void wheelEvent(QWheelEvent* event) Q_DECL_OVERRIDE;
@@ -566,7 +564,7 @@ private slots:
     void slotItemContextMenuRequested(int index, const QPointF& pos);
     void slotViewContextMenuRequested(const QPointF& pos);
     void slotHeaderContextMenuRequested(const QPointF& pos);
-    void slotHeaderColumnWidthChanged(const QByteArray& role, qreal current, qreal previous);
+    void slotHeaderColumnWidthChangeFinished(const QByteArray& role, qreal current);
     void slotItemHovered(int index);
     void slotItemUnhovered(int index);
     void slotItemDropEvent(int index, QGraphicsSceneDragDropEvent* event);
@@ -757,6 +755,8 @@ private:
     QUrl viewPropertiesUrl() const;
 
 private:
+    void updatePalette();
+
     bool m_active;
     bool m_tabsForFiles;
     bool m_assureVisibleCurrentIndex;

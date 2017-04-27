@@ -50,7 +50,7 @@ public:
      *
      * If \a enabled is true, it creates a secondary view with the url of the primary view.
      */
-    void setSplitViewEnabled(bool enabled);
+    void setSplitViewEnabled(bool enabled, const QUrl &secondaryUrl = QUrl());
 
     /**
      * @return The primary view containter.
@@ -148,6 +148,8 @@ private slots:
      * It emits the activeViewUrlChanged signal with the url \a newUrl.
      */
     void slotViewUrlRedirection(const QUrl& oldUrl, const QUrl& newUrl);
+
+    void switchActiveView();
 
 private:
     /**

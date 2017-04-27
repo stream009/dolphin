@@ -43,10 +43,12 @@
  */
 class KItemListContainerViewport : public QGraphicsView
 {
+    Q_OBJECT
+
 public:
     KItemListContainerViewport(QGraphicsScene* scene, QWidget* parent);
 protected:
-    virtual void wheelEvent(QWheelEvent* event);
+    void wheelEvent(QWheelEvent* event) Q_DECL_OVERRIDE;
 };
 
 KItemListContainerViewport::KItemListContainerViewport(QGraphicsScene* scene, QWidget* parent) :
@@ -183,27 +185,7 @@ void KItemListContainer::wheelEvent(QWheelEvent* event)
     KItemListSmoothScroller* smoothScroller = scrollHorizontally ?
                                               m_horizontalSmoothScroller : m_verticalSmoothScroller;
 
-    const QScrollBar* scrollBar = smoothScroller->scrollBar();
-    if (!event->pixelDelta().isNull()) {
-        const int numPixels =  event->pixelDelta().y();
-        if (event->modifiers().testFlag(Qt::ShiftModifier)) {
-            const int scrollingDirection = numPixels > 0 ? 1 : -1;
-            smoothScroller->scrollTo(scrollBar->value() - scrollBar->pageStep() * scrollingDirection);
-        } else {
-            smoothScroller->scrollTo(scrollBar->value() - numPixels);
-        }
-    } else {
-        const int numDegrees = event->angleDelta().y() / 8;
-        const int numSteps = numDegrees / 15;
-        if (event->modifiers().testFlag(Qt::ShiftModifier)) {
-            const int scrollingDirection = numSteps > 0 ? 1 : -1;
-            smoothScroller->scrollTo(scrollBar->value() - scrollBar->pageStep() * scrollingDirection);
-        } else {
-            smoothScroller->scrollTo(scrollBar->value() - numSteps * scrollBar->pageStep() / 4);
-        }
-    }
-
-    event->accept();
+    smoothScroller->handleWheelEvent(event);
 }
 
 void KItemListContainer::slotScrollOrientationChanged(Qt::Orientation current, Qt::Orientation previous)
@@ -283,7 +265,7 @@ void KItemListContainer::updateScrollOffsetScrollBar()
     if (view->scrollOrientation() == Qt::Vertical) {
         smoothScroller = m_verticalSmoothScroller;
         scrollOffsetScrollBar = verticalScrollBar();
-        singleStep = view->itemSize().height();
+        singleStep = view->itemSizeHint().height();
         // We cannot use view->size().height() because this height might
         // include the header widget, which is not part of the scrolled area.
         pageStep = view->verticalPageStep();
@@ -425,3 +407,4 @@ void KItemListContainer::updateScrollOffsetScrollBarPolicy()
     }
 }
 
+#include "kitemlistcontainer.moc"

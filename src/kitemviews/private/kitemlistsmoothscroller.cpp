@@ -19,6 +19,7 @@
 
 #include "kitemlistsmoothscroller.h"
 
+#include <QApplication>
 #include <QEvent>
 #include <QPropertyAnimation>
 #include <QScrollBar>
@@ -34,8 +35,9 @@ KItemListSmoothScroller::KItemListSmoothScroller(QScrollBar* scrollBar,
     m_animation(0)
 {
     m_animation = new QPropertyAnimation(this);
-    const int duration = m_scrollBar->style()->styleHint(QStyle::SH_Widget_Animate, nullptr, m_scrollBar) ? 100 : 1;
+    const int duration = m_scrollBar->style()->styleHint(QStyle::SH_Widget_Animate, nullptr, m_scrollBar) ? 300 : 1;
     m_animation->setDuration(duration);
+    m_animation->setEasingCurve(QEasingCurve::InOutQuart);
     connect(m_animation, &QPropertyAnimation::stateChanged,
             this, &KItemListSmoothScroller::slotAnimationStateChanged);
 
@@ -171,8 +173,7 @@ bool KItemListSmoothScroller::eventFilter(QObject* obj, QEvent* event)
         break;
 
     case QEvent::Wheel:
-        handleWheelEvent(static_cast<QWheelEvent*>(event));
-        break;
+        return false; // we're the ones sending them
 
     default:
         break;
@@ -192,18 +193,14 @@ void KItemListSmoothScroller::slotAnimationStateChanged(QAbstractAnimation::Stat
 
 void KItemListSmoothScroller::handleWheelEvent(QWheelEvent* event)
 {
-    const int numDegrees = event->delta() / 8;
-    const int numSteps = numDegrees / 15;
-
     const bool previous = m_smoothScrolling;
 
     m_smoothScrolling = true;
-    const int value = m_scrollBar->value();
-    const int pageStep = m_scrollBar->pageStep();
-    m_scrollBar->setValue(value - numSteps * pageStep);
+
+    QWheelEvent copy = *event;
+    QApplication::sendEvent(m_scrollBar, &copy);
+    event->setAccepted(copy.isAccepted());
 
     m_smoothScrolling = previous;
-
-    event->accept();
 }
 

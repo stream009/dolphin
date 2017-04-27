@@ -71,7 +71,7 @@ void TerminalPanel::dockVisibilityChanged()
                    this, SLOT(slotKonsolePartCurrentDirectoryChanged(QString)));
 
         // Make sure this terminal does not prevent unmounting any removable drives
-        changeDir(QUrl::fromLocalFile("/"));
+        changeDir(QUrl::fromLocalFile(QStringLiteral("/")));
 
         // Because we have disconnected from the part's currentDirectoryChanged()
         // signal, we have to update m_konsolePartCurrentDirectory manually. If this
@@ -105,7 +105,7 @@ void TerminalPanel::showEvent(QShowEvent* event)
     if (!m_terminal) {
         m_clearTerminal = true;
         KPluginFactory* factory = 0;
-        KService::Ptr service = KService::serviceByDesktopName("konsolepart");
+        KService::Ptr service = KService::serviceByDesktopName(QStringLiteral("konsolepart"));
         if (service) {
             factory = KPluginLoader(service->library()).factory();
         }
@@ -137,7 +137,7 @@ void TerminalPanel::changeDir(const QUrl& url)
         sendCdToTerminal(url.toLocalFile());
     } else {
         m_mostLocalUrlJob = KIO::mostLocalUrl(url, KIO::HideProgressInfo);
-        if (m_mostLocalUrlJob->ui()) {
+        if (m_mostLocalUrlJob->uiDelegate()) {
             KJobWidgets::setWindow(m_mostLocalUrlJob, this);
         }
         connect(m_mostLocalUrlJob, &KIO::StatJob::result, this, &TerminalPanel::slotMostLocalUrlResult);
@@ -171,7 +171,7 @@ void TerminalPanel::sendCdToTerminal(const QString& dir)
     m_sendCdToTerminalHistory.enqueue(QDir(dir).canonicalPath());
 
     if (m_clearTerminal) {
-        m_terminal->sendInput(" clear\n");
+        m_terminal->sendInput(QStringLiteral(" clear\n"));
         m_clearTerminal = false;
     }
 }

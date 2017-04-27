@@ -24,6 +24,8 @@
 #include "dolphin_generalsettings.h"
 
 #include <KLocalizedString>
+#include <KUrlMimeData>
+
 #include "dolphindebug.h"
 
 #include "private/kfileitemmodelsortalgorithm.h"
@@ -41,7 +43,6 @@
 KFileItemModel::KFileItemModel(QObject* parent) :
     KItemModelBase("text", parent),
     m_dirLister(0),
-    m_naturalSorting(GeneralSettings::naturalSorting()),
     m_sortDirsFirst(true),
     m_sortRole(NameRole),
     m_sortingProgressPercent(-1),
@@ -58,8 +59,9 @@ KFileItemModel::KFileItemModel(QObject* parent) :
     m_expandedDirs(),
     m_urlsToExpand()
 {
-    m_collator.setCaseSensitivity(Qt::CaseInsensitive);
     m_collator.setNumericMode(true);
+
+    loadSortingSettings();
 
     m_dirLister = new KFileItemModelDirLister(this);
     m_dirLister->setDelayedMimeTypes(true);
@@ -78,6 +80,7 @@ KFileItemModel::KFileItemModel(QObject* parent) :
     connect(m_dirLister, static_cast<void(KFileItemModelDirLister::*)()>(&KFileItemModelDirLister::clear), this, &KFileItemModel::slotClear);
     connect(m_dirLister, &KFileItemModelDirLister::infoMessage, this, &KFileItemModel::infoMessage);
     connect(m_dirLister, &KFileItemModelDirLister::errorMessage, this, &KFileItemModel::errorMessage);
+    connect(m_dirLister, &KFileItemModelDirLister::percent, this, &KFileItemModel::directoryLoadingProgress);
     connect(m_dirLister, static_cast<void(KFileItemModelDirLister::*)(const QUrl&, const QUrl&)>(&KFileItemModelDirLister::redirection), this, &KFileItemModel::directoryRedirection);
     connect(m_dirLister, &KFileItemModelDirLister::urlIsFileError, this, &KFileItemModel::urlIsFileError);
 
@@ -89,6 +92,7 @@ KFileItemModel::KFileItemModel(QObject* parent) :
     m_roles.insert("text");
     m_roles.insert("isDir");
     m_roles.insert("isLink");
+    m_roles.insert("isHidden");
 
     // For slow KIO-slaves like used for searching it makes sense to show results periodically even
     // before the completed() or canceled() signal has been emitted.
@@ -106,14 +110,13 @@ KFileItemModel::KFileItemModel(QObject* parent) :
     m_resortAllItemsTimer->setSingleShot(true);
     connect(m_resortAllItemsTimer, &QTimer::timeout, this, &KFileItemModel::resortAllItems);
 
-    connect(GeneralSettings::self(), &GeneralSettings::naturalSortingChanged,
-            this, &KFileItemModel::slotNaturalSortingChanged);
+    connect(GeneralSettings::self(), &GeneralSettings::sortingChoiceChanged, this, &KFileItemModel::slotSortingChoiceChanged);
 }
 
 KFileItemModel::~KFileItemModel()
 {
     qDeleteAll(m_itemData);
-    qDeleteAll(m_filteredItems.values());
+    qDeleteAll(m_filteredItems);
     qDeleteAll(m_pendingItemsToInsert);
 }
 
@@ -250,7 +253,7 @@ QMimeData* KFileItemModel::createMimeData(const KItemSet& indexes) const
     bool canUseMostLocalUrls = true;
     const ItemData* lastAddedItem = 0;
 
-    foreach (int index, indexes) {
+    for (int index : indexes) {
         const ItemData* itemData = m_itemData.at(index);
         const ItemData* parent = itemData->parent;
 
@@ -266,7 +269,7 @@ QMimeData* KFileItemModel::createMimeData(const KItemSet& indexes) const
         lastAddedItem = itemData;
         const KFileItem& item = itemData->item;
         if (!item.isNull()) {
-            urls << item.targetUrl();
+            urls << item.url();
 
             bool isLocal;
             mostLocalUrls << item.mostLocalUrl(isLocal);
@@ -276,13 +279,7 @@ QMimeData* KFileItemModel::createMimeData(const KItemSet& indexes) const
         }
     }
 
-    const bool different = canUseMostLocalUrls && mostLocalUrls != urls;
-    if (different) {
-        data->setUrls(mostLocalUrls);
-    } else {
-        data->setUrls(urls);
-    }
-
+    KUrlMimeData::setUrls(urls, mostLocalUrls, data);
     return data;
 }
 
@@ -335,7 +332,8 @@ QList<QPair<int, QVariant> > KFileItemModel::groups() const
         case NameRole:        m_groups = nameRoleGroups(); break;
         case SizeRole:        m_groups = sizeRoleGroups(); break;
         case DeletionDateRole:
-        case DateRole:        m_groups = dateRoleGroups(roleType); break;
+        case ModificationTimeRole:
+        case AccessTimeRole:        m_groups = timeRoleGroups(roleType); break;
         case PermissionsRole: m_groups = permissionRoleGroups(); break;
         case RatingRole:      m_groups = ratingRoleGroups(); break;
         default:              m_groups = genericStringRoleGroups(role); break;
@@ -424,12 +422,15 @@ int KFileItemModel::index(const QUrl& url) const
             foreach (const QUrl& url, indexesForUrl.uniqueKeys()) {
                 if (indexesForUrl.count(url) > 1) {
                     qCWarning(DolphinDebug) << "Multiple items found with the URL" << url;
-                    foreach (int index, indexesForUrl.values(url)) {
-                        const ItemData* data = m_itemData.at(index);
-                        qCWarning(DolphinDebug) << "index" << index << ":" << data->item;
+
+                    auto it = indexesForUrl.find(url);
+                    while (it != indexesForUrl.end() && it.key() == url) {
+                        const ItemData* data = m_itemData.at(it.value());
+                        qCWarning(DolphinDebug) << "index" << it.value() << ":" << data->item;
                         if (data->parent) {
                             qCWarning(DolphinDebug) << "parent" << data->parent->item;
                         }
+                        ++it;
                     }
                 }
             }
@@ -598,7 +599,12 @@ int KFileItemModel::expandedParentsCount(int index) const
 
 QSet<QUrl> KFileItemModel::expandedDirectories() const
 {
-    return m_expandedDirs.values().toSet();
+    QSet<QUrl> result;
+    const auto dirs = m_expandedDirs;
+    for (const auto &dir : dirs) {
+        result.insert(dir);
+    }
+    return result;
 }
 
 void KFileItemModel::restoreExpandedDirectories(const QSet<QUrl> &urls)
@@ -784,6 +790,27 @@ void KFileItemModel::onSortOrderChanged(Qt::SortOrder current, Qt::SortOrder pre
     Q_UNUSED(current);
     Q_UNUSED(previous);
     resortAllItems();
+}
+
+void KFileItemModel::loadSortingSettings()
+{
+    using Choice = GeneralSettings::EnumSortingChoice;
+    switch (GeneralSettings::sortingChoice()) {
+    case Choice::NaturalSorting:
+        m_naturalSorting = true;
+        m_collator.setCaseSensitivity(Qt::CaseInsensitive);
+        break;
+    case Choice::CaseSensitiveSorting:
+        m_naturalSorting = false;
+        m_collator.setCaseSensitivity(Qt::CaseSensitive);
+        break;
+    case Choice::CaseInsensitiveSorting:
+        m_naturalSorting = false;
+        m_collator.setCaseSensitivity(Qt::CaseInsensitive);
+        break;
+    default:
+        Q_UNREACHABLE();
+    }
 }
 
 void KFileItemModel::resortAllItems()
@@ -1085,7 +1112,7 @@ void KFileItemModel::slotClear()
     qCDebug(DolphinDebug) << "Clearing all items";
 #endif
 
-    qDeleteAll(m_filteredItems.values());
+    qDeleteAll(m_filteredItems);
     m_filteredItems.clear();
     m_groups.clear();
 
@@ -1106,9 +1133,9 @@ void KFileItemModel::slotClear()
     m_expandedDirs.clear();
 }
 
-void KFileItemModel::slotNaturalSortingChanged()
+void KFileItemModel::slotSortingChoiceChanged()
 {
-    m_naturalSorting = GeneralSettings::naturalSorting();
+    loadSortingSettings();
     resortAllItems();
 }
 
@@ -1450,6 +1477,7 @@ KFileItemModel::RoleType KFileItemModel::typeForRole(const QByteArray& role) con
         // with KFileItemModel::roleForType() in case if a change is done).
         roles.insert("isDir", IsDirRole);
         roles.insert("isLink", IsLinkRole);
+        roles.insert("isHidden", IsHiddenRole);
         roles.insert("isExpanded", IsExpandedRole);
         roles.insert("isExpandable", IsExpandableRole);
         roles.insert("expandedParentsCount", ExpandedParentsCountRole);
@@ -1476,6 +1504,7 @@ QByteArray KFileItemModel::roleForType(RoleType roleType) const
         // with KFileItemModel::typeForRole() in case if a change is done).
         roles.insert(IsDirRole, "isDir");
         roles.insert(IsLinkRole, "isLink");
+        roles.insert(IsHiddenRole, "isHidden");
         roles.insert(IsExpandedRole, "isExpanded");
         roles.insert(IsExpandableRole, "isExpandable");
         roles.insert(ExpandedParentsCountRole, "expandedParentsCount");
@@ -1503,6 +1532,10 @@ QHash<QByteArray, QVariant> KFileItemModel::retrieveData(const KFileItem& item, 
         data.insert(sharedValue("isLink"), true);
     }
 
+    if (m_requestRole[IsHiddenRole] && item.isHidden()) {
+        data.insert(sharedValue("isHidden"), true);
+    }
+
     if (m_requestRole[NameRole]) {
         data.insert(sharedValue("text"), item.text());
     }
@@ -1511,12 +1544,20 @@ QHash<QByteArray, QVariant> KFileItemModel::retrieveData(const KFileItem& item, 
         data.insert(sharedValue("size"), item.size());
     }
 
-    if (m_requestRole[DateRole]) {
+    if (m_requestRole[ModificationTimeRole]) {
         // Don't use KFileItem::timeString() as this is too expensive when
         // having several thousands of items. Instead the formatting of the
         // date-time will be done on-demand by the view when the date will be shown.
         const QDateTime dateTime = item.time(KFileItem::ModificationTime);
-        data.insert(sharedValue("date"), dateTime);
+        data.insert(sharedValue("modificationtime"), dateTime);
+    }
+
+    if (m_requestRole[AccessTimeRole]) {
+        // Don't use KFileItem::timeString() as this is too expensive when
+        // having several thousands of items. Instead the formatting of the
+        // date-time will be done on-demand by the view when the date will be shown.
+        const QDateTime dateTime = item.time(KFileItem::AccessTime);
+        data.insert(sharedValue("accesstime"), dateTime);
     }
 
     if (m_requestRole[PermissionsRole]) {
@@ -1534,7 +1575,7 @@ QHash<QByteArray, QVariant> KFileItemModel::retrieveData(const KFileItem& item, 
     if (m_requestRole[DestinationRole]) {
         QString destination = item.linkDest();
         if (destination.isEmpty()) {
-            destination = QLatin1String("-");
+            destination = QStringLiteral("-");
         }
         data.insert(sharedValue("destination"), destination);
     }
@@ -1671,6 +1712,16 @@ public:
         m_collator.setNumericMode(other.m_collator.numericMode());
     }
 
+    ~KFileItemModelLessThan() = default;
+    //We do not delete m_model as the pointer was passed from outside ant it will be deleted elsewhere.
+
+    KFileItemModelLessThan& operator=(const KFileItemModelLessThan& other)
+    {
+        m_model = other.m_model;
+        m_collator = other.m_collator;
+        return *this;
+    }
+
     bool operator()(const KFileItemModel::ItemData* a, const KFileItemModel::ItemData* b) const
     {
         return m_model->lessThan(a, b, m_collator);
@@ -1743,7 +1794,7 @@ int KFileItemModel::sortRoleCompare(const ItemData* a, const ItemData* b, const 
         break;
     }
 
-    case DateRole: {
+    case ModificationTimeRole: {
         const QDateTime dateTimeA = itemA.time(KFileItem::ModificationTime);
         const QDateTime dateTimeB = itemB.time(KFileItem::ModificationTime);
         if (dateTimeA < dateTimeB) {
@@ -1866,13 +1917,14 @@ QList<QPair<int, QVariant> > KFileItemModel::nameRoleGroups() const
             if (newFirstChar.isLetter()) {
                 // Try to find a matching group in the range 'A' to 'Z'.
                 static std::vector<QChar> lettersAtoZ;
+                lettersAtoZ.reserve('Z' - 'A' + 1);
                 if (lettersAtoZ.empty()) {
                     for (char c = 'A'; c <= 'Z'; ++c) {
                         lettersAtoZ.push_back(QLatin1Char(c));
                     }
                 }
 
-                auto localeAwareLessThan = [this](const QChar& c1, const QChar& c2) -> bool {
+                auto localeAwareLessThan = [this](QChar c1, QChar c2) -> bool {
                     return m_collator.compare(c1, c2) < 0;
                 };
 
@@ -1944,8 +1996,10 @@ QDateTime KFileItemModel::groupingDateTime(const ItemData *item,
                                            const RoleType roleType) const
 {
     switch (roleType) {
-    case DateRole:
+    case ModificationTimeRole:
         return item->item.time(KFileItem::ModificationTime);
+    case AccessTimeRole:
+        return item->item.time(KFileItem::AccessTime);
     case DeletionDateRole:
         return { item->values.value("deletionDate").toDateTime() };
     default:
@@ -1955,7 +2009,7 @@ QDateTime KFileItemModel::groupingDateTime(const ItemData *item,
     Q_ASSERT(false && "never reach here");
 }
 
-QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups(const RoleType roleType) const
+QList<QPair<int, QVariant> > KFileItemModel::timeRoleGroups(RoleType const roleType) const
 {
     Q_ASSERT(!m_itemData.isEmpty());
 
@@ -1964,27 +2018,27 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups(const RoleType roleT
 
     const QDate currentDate = QDate::currentDate();
 
-    QDate previousItemDate;
+    QDate previousFileDate;
     QString groupValue;
     for (int i = 0; i <= maxIndex; ++i) {
         if (isChildItem(i)) {
             continue;
         }
 
-        const auto &itemDateTime =
-                                groupingDateTime(m_itemData.at(i), roleType);
-        const QDate itemDate = itemDateTime.date();
-        if (itemDate == previousItemDate) {
+        const QDateTime fileTime =
+                            groupingDateTime(m_itemData.at(i), roleType);
+        const QDate fileDate = fileTime.date();
+        if (fileDate == previousFileDate) {
             // The current item is in the same group as the previous item
             continue;
         }
-        previousItemDate = itemDate;
+        previousFileDate = fileDate;
 
-        const int daysDistance = itemDate.daysTo(currentDate);
+        const int daysDistance = fileDate.daysTo(currentDate);
 
         QString newGroupValue;
-        if (currentDate.year() == itemDate.year() &&
-            currentDate.month() == itemDate.month()) {
+        if (currentDate.year() == fileDate.year() &&
+            currentDate.month() == fileDate.month()) {
 
             switch (daysDistance / 7) {
             case 0:
@@ -1992,7 +2046,7 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups(const RoleType roleT
                 case 0:  newGroupValue = i18nc("@title:group Date", "Today"); break;
                 case 1:  newGroupValue = i18nc("@title:group Date", "Yesterday"); break;
                 default:
-                    newGroupValue = itemDateTime.toString(
+                    newGroupValue = fileTime.toString(
                         i18nc("@title:group Date: The week day name: dddd", "dddd"));
                     newGroupValue = i18nc("Can be used to script translation of \"dddd\""
                         "with context @title:group Date", "%1", newGroupValue);
@@ -2016,18 +2070,18 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups(const RoleType roleT
             }
         } else {
             const QDate lastMonthDate = currentDate.addMonths(-1);
-            if  (lastMonthDate.year() == itemDate.year() &&
-                 lastMonthDate.month() == itemDate.month()) {
+            if  (lastMonthDate.year() == fileDate.year() &&
+                 lastMonthDate.month() == fileDate.month()) {
 
                 if (daysDistance == 1) {
-                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
+                    newGroupValue = fileTime.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Yesterday' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'Yesterday' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7) {
-                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
+                    newGroupValue = fileTime.toString(i18nc("@title:group Date: "
                         "The week day name: dddd, MMMM is full month name "
                         "in current locale, and yyyy is full year number",
                         "dddd (MMMM, yyyy)"));
@@ -2035,28 +2089,28 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups(const RoleType roleT
                         "\"dddd (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7 * 2) {
-                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
+                    newGroupValue = fileTime.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'One Week Ago' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'One Week Ago' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7 * 3) {
-                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
+                    newGroupValue = fileTime.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Two Weeks Ago' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'Two Weeks Ago' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else if (daysDistance <= 7 * 4) {
-                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
+                    newGroupValue = fileTime.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Three Weeks Ago' (MMMM, yyyy)"));
                     newGroupValue = i18nc("Can be used to script translation of "
                         "\"'Three Weeks Ago' (MMMM, yyyy)\" with context @title:group Date",
                         "%1", newGroupValue);
                 } else {
-                    newGroupValue = itemDate.toString(i18nc("@title:group Date: "
+                    newGroupValue = fileTime.toString(i18nc("@title:group Date: "
                         "MMMM is full month name in current locale, and yyyy is "
                         "full year number", "'Earlier on' MMMM, yyyy"));
                     newGroupValue = i18nc("Can be used to script translation of "
@@ -2064,7 +2118,7 @@ QList<QPair<int, QVariant> > KFileItemModel::dateRoleGroups(const RoleType roleT
                         "%1", newGroupValue);
                 }
             } else {
-                newGroupValue = itemDate.toString(i18nc("@title:group "
+                newGroupValue = fileTime.toString(i18nc("@title:group "
                     "The month and year: MMMM is full month name in current locale, "
                     "and yyyy is full year number", "MMMM, yyyy"));
                 newGroupValue = i18nc("Can be used to script translation of "
@@ -2235,11 +2289,13 @@ const KFileItemModel::RoleInfoMap* KFileItemModel::rolesInfoMap(int& count)
         { 0,             NoRole,          0, 0,                                             0, 0,                                     false, false },
         { "text",        NameRole,        I18N_NOOP2_NOSTRIP("@label", "Name"),             0, 0,                                     false, false },
         { "size",        SizeRole,        I18N_NOOP2_NOSTRIP("@label", "Size"),             0, 0,                                     false, false },
-        { "date",        DateRole,        I18N_NOOP2_NOSTRIP("@label", "Date"),             0, 0,                                     false, false },
+        { "modificationtime",        ModificationTimeRole,        I18N_NOOP2_NOSTRIP("@label", "Modified"),             0, 0,                                     false, false },
+        { "accesstime",        AccessTimeRole,        I18N_NOOP2_NOSTRIP("@label", "Accessed"),             0, 0,                                     false, false },
         { "type",        TypeRole,        I18N_NOOP2_NOSTRIP("@label", "Type"),             0, 0,                                     false, false },
         { "rating",      RatingRole,      I18N_NOOP2_NOSTRIP("@label", "Rating"),           0, 0,                                     true,  false },
         { "tags",        TagsRole,        I18N_NOOP2_NOSTRIP("@label", "Tags"),             0, 0,                                     true,  false },
         { "comment",     CommentRole,     I18N_NOOP2_NOSTRIP("@label", "Comment"),          0, 0,                                     true,  false },
+        { "title",       TitleRole,       I18N_NOOP2_NOSTRIP("@label", "Title"),            I18N_NOOP2_NOSTRIP("@label", "Document"), true,  true  },
         { "wordCount",   WordCountRole,   I18N_NOOP2_NOSTRIP("@label", "Word Count"),       I18N_NOOP2_NOSTRIP("@label", "Document"), true,  true  },
         { "lineCount",   LineCountRole,   I18N_NOOP2_NOSTRIP("@label", "Line Count"),       I18N_NOOP2_NOSTRIP("@label", "Document"), true,  true  },
         { "imageSize",   ImageSizeRole,   I18N_NOOP2_NOSTRIP("@label", "Image Size"),       I18N_NOOP2_NOSTRIP("@label", "Image"),    true,  true  },
@@ -2250,7 +2306,7 @@ const KFileItemModel::RoleInfoMap* KFileItemModel::rolesInfoMap(int& count)
         { "track",       TrackRole,       I18N_NOOP2_NOSTRIP("@label", "Track"),            I18N_NOOP2_NOSTRIP("@label", "Audio"),    true,  true  },
         { "path",        PathRole,        I18N_NOOP2_NOSTRIP("@label", "Path"),             I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "destination", DestinationRole, I18N_NOOP2_NOSTRIP("@label", "Link Destination"), I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
-        { "copiedFrom",  CopiedFromRole,  I18N_NOOP2_NOSTRIP("@label", "Copied From"),      I18N_NOOP2_NOSTRIP("@label", "Other"),    true,  false },
+        { "originUrl",   OriginUrlRole,   I18N_NOOP2_NOSTRIP("@label", "Downloaded From"),  I18N_NOOP2_NOSTRIP("@label", "Other"),    true,  false },
         { "permissions", PermissionsRole, I18N_NOOP2_NOSTRIP("@label", "Permissions"),      I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "owner",       OwnerRole,       I18N_NOOP2_NOSTRIP("@label", "Owner"),            I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
         { "group",       GroupRole,       I18N_NOOP2_NOSTRIP("@label", "User Group"),       I18N_NOOP2_NOSTRIP("@label", "Other"),    false, false },
@@ -2344,4 +2400,3 @@ bool KFileItemModel::isConsistent() const
 
     return true;
 }
-

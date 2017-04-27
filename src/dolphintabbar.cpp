@@ -29,7 +29,8 @@
 
 DolphinTabBar::DolphinTabBar(QWidget* parent) :
     QTabBar(parent),
-    m_autoActivationIndex(-1)
+    m_autoActivationIndex(-1),
+    m_tabToBeClosedOnMiddleMouseButtonRelease(-1)
 {
     setAcceptDrops(true);
     setSelectionBehaviorOnRemove(QTabBar::SelectPreviousTab);
@@ -39,8 +40,8 @@ DolphinTabBar::DolphinTabBar(QWidget* parent) :
     m_autoActivationTimer = new QTimer(this);
     m_autoActivationTimer->setSingleShot(true);
     m_autoActivationTimer->setInterval(800);
-    connect(m_autoActivationTimer, SIGNAL(timeout()),
-            this, SLOT(slotAutoActivationTimeout()));
+    connect(m_autoActivationTimer, &QTimer::timeout,
+            this, &DolphinTabBar::slotAutoActivationTimeout);
 }
 
 void DolphinTabBar::dragEnterEvent(QDragEnterEvent* event)
@@ -95,12 +96,25 @@ void DolphinTabBar::mousePressEvent(QMouseEvent* event)
     const int index = tabAt(event->pos());
 
     if (index >= 0 && event->button() == Qt::MiddleButton) {
+        m_tabToBeClosedOnMiddleMouseButtonRelease = index;
+        return;
+    }
+
+    QTabBar::mousePressEvent(event);
+}
+
+void DolphinTabBar::mouseReleaseEvent(QMouseEvent *event)
+{
+    const int index = tabAt(event->pos());
+
+    if (index >= 0 && index == m_tabToBeClosedOnMiddleMouseButtonRelease
+        && event->button() == Qt::MiddleButton) {
         // Mouse middle click on a tab closes this tab.
         emit tabCloseRequested(index);
         return;
     }
 
-    QTabBar::mousePressEvent(event);
+    QTabBar::mouseReleaseEvent(event);
 }
 
 void DolphinTabBar::mouseDoubleClickEvent(QMouseEvent* event)
@@ -125,10 +139,10 @@ void DolphinTabBar::contextMenuEvent(QContextMenuEvent* event)
         // Tab context menu
         QMenu menu(this);
 
-        QAction* newTabAction = menu.addAction(QIcon::fromTheme("tab-new"), i18nc("@action:inmenu", "New Tab"));
-        QAction* detachTabAction = menu.addAction(QIcon::fromTheme("tab-detach"), i18nc("@action:inmenu", "Detach Tab"));
-        QAction* closeOtherTabsAction = menu.addAction(QIcon::fromTheme("tab-close-other"), i18nc("@action:inmenu", "Close Other Tabs"));
-        QAction* closeTabAction = menu.addAction(QIcon::fromTheme("tab-close"), i18nc("@action:inmenu", "Close Tab"));
+        QAction* newTabAction = menu.addAction(QIcon::fromTheme(QStringLiteral("tab-new")), i18nc("@action:inmenu", "New Tab"));
+        QAction* detachTabAction = menu.addAction(QIcon::fromTheme(QStringLiteral("tab-detach")), i18nc("@action:inmenu", "Detach Tab"));
+        QAction* closeOtherTabsAction = menu.addAction(QIcon::fromTheme(QStringLiteral("tab-close-other")), i18nc("@action:inmenu", "Close Other Tabs"));
+        QAction* closeTabAction = menu.addAction(QIcon::fromTheme(QStringLiteral("tab-close")), i18nc("@action:inmenu", "Close Tab"));
 
         QAction* selectedAction = menu.exec(event->globalPos());
         if (selectedAction == newTabAction) {

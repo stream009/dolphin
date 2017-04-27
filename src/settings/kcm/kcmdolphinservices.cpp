@@ -26,8 +26,7 @@
 
 #include <QVBoxLayout>
 
-K_PLUGIN_FACTORY(KCMDolphinServicesConfigFactory, registerPlugin<DolphinServicesConfigModule>("dolphinservices");)
-K_EXPORT_PLUGIN(KCMDolphinServicesConfigFactory("kcmdolphinservices"))
+K_PLUGIN_FACTORY(KCMDolphinServicesConfigFactory, registerPlugin<DolphinServicesConfigModule>(QStringLiteral("dolphinservices"));)
 
 DolphinServicesConfigModule::DolphinServicesConfigModule(QWidget* parent, const QVariantList& args) :
     KCModule(parent),
