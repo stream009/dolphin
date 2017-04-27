@@ -26,11 +26,12 @@
 
 class DummyModel : public KItemModelBase
 {
+    Q_OBJECT
 public:
     DummyModel();
     void setCount(int count);
-    virtual int count() const;
-    virtual QHash<QByteArray, QVariant> data(int index) const;
+    int count() const Q_DECL_OVERRIDE;
+    QHash<QByteArray, QVariant> data(int index) const Q_DECL_OVERRIDE;
 
 private:
     int m_count;
@@ -322,12 +323,12 @@ namespace {
     };
 }
 
-Q_DECLARE_METATYPE(KItemSet);
-Q_DECLARE_METATYPE(ChangeType);
-Q_DECLARE_METATYPE(KItemRange);
-Q_DECLARE_METATYPE(KItemRangeList);
-Q_DECLARE_METATYPE(KItemListSelectionManager::SelectionMode);
-Q_DECLARE_METATYPE(QList<int>);
+Q_DECLARE_METATYPE(KItemSet)
+Q_DECLARE_METATYPE(ChangeType)
+Q_DECLARE_METATYPE(KItemRange)
+Q_DECLARE_METATYPE(KItemRangeList)
+Q_DECLARE_METATYPE(KItemListSelectionManager::SelectionMode)
+Q_DECLARE_METATYPE(QList<int>)
 
 /**
  * The following function provides a generic way to test the selection functionality.

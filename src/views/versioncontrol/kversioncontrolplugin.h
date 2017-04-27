@@ -20,12 +20,12 @@
 #ifndef KVERSIONCONTROLPLUGIN_H
 #define KVERSIONCONTROLPLUGIN_H
 
-#include <dolphin_export.h>
+#include <dolphinvcs_export.h>
 
 #include <QObject>
-#include <KFileItem>
 #include <QAction>
-
+class KFileItemList;
+class KFileItem;
 /**
  * @brief Base class for version control plugins.
  *
@@ -81,7 +81,7 @@
  *
  * @since 4.8
  */
-class DOLPHIN_EXPORT KVersionControlPlugin : public QObject
+class DOLPHINVCS_EXPORT KVersionControlPlugin : public QObject
 {
     Q_OBJECT
 
@@ -165,16 +165,16 @@ public:
     /**
      * Is invoked after the version control information has been
      * received. It is assured that
-     * KVersionControlPluginV2::beginInfoRetrieval() has been
+     * KVersionControlPlugin::beginRetrieval() has been
      * invoked before.
      */
     virtual void endRetrieval() = 0;
 
     /**
      * @return The version for the item \p item.
-     *         It is assured that KVersionControlPlugin::beginInfoRetrieval() has been
+     *         It is assured that KVersionControlPlugin::beginRetrieval() has been
      *         invoked before and that the file is part of the directory specified
-     *         in beginInfoRetrieval().
+     *         in beginRetrieval().
      */
     virtual ItemVersion itemVersion(const KFileItem& item) const = 0;
 

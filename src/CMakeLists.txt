@@ -1,3 +1,4 @@
+include(ECMAddAppIcon)
 
 configure_file(config-baloo.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config-baloo.h)
 
@@ -23,13 +24,11 @@ set(dolphinvcs_LIB_SRCS
 )
 
 add_library(dolphinvcs ${dolphinvcs_LIB_SRCS})
-
-generate_export_header(dolphinvcs BASE_NAME dolphin)
+generate_export_header(dolphinvcs BASE_NAME dolphinvcs)
 
 target_link_libraries(
     dolphinvcs PUBLIC
     Qt5::Widgets
-    KF5::KIOCore
 )
 
 set_target_properties(dolphinvcs PROPERTIES
@@ -49,7 +48,7 @@ ecm_generate_headers(dolphinvcs_LIB_HEADERS
 install(TARGETS dolphinvcs EXPORT DolphinVcsTargets ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 
 install(FILES views/versioncontrol/fileviewversioncontrolplugin.desktop DESTINATION ${KDE_INSTALL_KSERVICETYPES5DIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dolphin_export.h DESTINATION ${KDE_INSTALL_INCLUDEDIR} COMPONENT Devel)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dolphinvcs_export.h DESTINATION ${KDE_INSTALL_INCLUDEDIR} COMPONENT Devel)
 install(FILES ${dolphinvcs_LIB_HEADERS} DESTINATION "${KDE_INSTALL_INCLUDEDIR}/Dolphin" COMPONENT Devel)
 
 ########### next target ###############
@@ -103,7 +102,7 @@ set(dolphinprivate_LIB_SRCS
     views/dolphinviewactionhandler.cpp
     views/draganddrophelper.cpp
     views/renamedialog.cpp
-    views/tooltips/filemetadatatooltip.cpp
+    views/tooltips/dolphinfilemetadatawidget.cpp
     views/tooltips/tooltipmanager.cpp
     views/versioncontrol/updateitemstatesthread.cpp
     views/versioncontrol/versioncontrolobserver.cpp
@@ -132,21 +131,23 @@ kconfig_add_kcfg_files(dolphinprivate_LIB_SRCS GENERATE_MOC
 )
 
 add_library(dolphinprivate ${dolphinprivate_LIB_SRCS})
+generate_export_header(dolphinprivate BASE_NAME dolphin)
 
 target_link_libraries(
     dolphinprivate PUBLIC
     dolphinvcs
     Qt5::Gui
+    KF5::Crash
     KF5::I18n
     KF5::IconThemes
     KF5::KIOCore
     KF5::KIOWidgets
     KF5::KIOFileWidgets
     KF5::Completion
-    KF5::TextEditor
-    KF5::WindowSystem
+    KF5::TextWidgets
     KF5::ConfigCore
     KF5::NewStuff
+    KF5::Parts
 )
 
 if(HAVE_BALOO)
@@ -168,7 +169,8 @@ set_target_properties(dolphinprivate PROPERTIES
     SOVERSION ${DOLPHINPRIVATE_SOVERSION}
 )
 
-install(TARGETS dolphinprivate ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS dolphinprivate ${KDE_INSTALL_TARGETS_DEFAULT_ARGS} LIBRARY NAMELINK_SKIP)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dolphin_export.h DESTINATION ${KDE_INSTALL_INCLUDEDIR} COMPONENT Devel)
 
 ##########################################
 
@@ -267,8 +269,9 @@ if(NOT WIN32)
    set(dolphin_SRCS ${dolphin_SRCS} panels/terminal/terminalpanel.cpp)
 endif()
 
-# TODO Does anything replace kde4_add_app_icon ?
-#kde4_add_app_icon(dolphin_SRCS "${KDE4_ICON_INSTALL_DIR}/oxygen/*/apps/system-file-manager.png")
+# Sets the icon on Windows and OSX
+file(GLOB ICONS_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/icons/*system-file-manager.png")
+ecm_add_app_icon(dolphin_SRCS ICONS ${ICONS_SRCS})
 
 kf5_add_kdeinit_executable(dolphin ${dolphin_SRCS})
 
@@ -381,7 +384,7 @@ install( FILES settings/dolphin_directoryviewpropertysettings.kcfg
                settings/dolphin_versioncontrolsettings.kcfg
          DESTINATION ${KDE_INSTALL_KCFGDIR} )
 install( FILES dolphinui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/dolphin )
-install( FILES dolphin.appdata.xml DESTINATION ${KDE_INSTALL_DATAROOTDIR}/appdata )
+install( FILES org.kde.dolphin.appdata.xml DESTINATION ${KDE_INSTALL_METAINFODIR} )
 install( FILES settings/kcm/kcmdolphinviewmodes.desktop DESTINATION
 ${KDE_INSTALL_KSERVICES5DIR} )
 install( FILES settings/kcm/kcmdolphinnavigation.desktop DESTINATION ${KDE_INSTALL_KSERVICES5DIR} )

@@ -60,11 +60,11 @@ RenameDialog::RenameDialog(QWidget *parent, const KFileItemList& items) :
     m_okButton = buttonBox->button(QDialogButtonBox::Ok);
     m_okButton->setDefault(true);
     m_okButton->setShortcut(Qt::CTRL | Qt::Key_Return);
-    connect(buttonBox, SIGNAL(accepted()), this, SLOT(slotAccepted()));
-    connect(buttonBox, SIGNAL(rejected()), this, SLOT(reject()));
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &RenameDialog::slotAccepted);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &RenameDialog::reject);
     m_okButton->setDefault(true);
 
-    KGuiItem::assign(m_okButton, KGuiItem(i18nc("@action:button", "&Rename"), "dialog-ok-apply"));
+    KGuiItem::assign(m_okButton, KGuiItem(i18nc("@action:button", "&Rename"), QStringLiteral("dialog-ok-apply")));
 
     QWidget* page = new QWidget(this);
     mainLayout->addWidget(page);
@@ -108,7 +108,6 @@ RenameDialog::RenameDialog(QWidget *parent, const KFileItemList& items) :
 
     m_lineEdit->setText(m_newName);
     m_lineEdit->setSelection(0, selectionLength);
-    m_lineEdit->setFocus();
 
     topLayout->addWidget(editLabel);
     topLayout->addWidget(m_lineEdit);
@@ -160,10 +159,10 @@ void RenameDialog::renameItem(const KFileItem &item, const QString& newName)
         widget = this;
     }
 
-    KIO::Job * job = KIO::moveAs(oldUrl, newUrl);
+    KIO::Job * job = KIO::moveAs(oldUrl, newUrl, KIO::HideProgressInfo);
     KJobWidgets::setWindow(job, widget);
     KIO::FileUndoManager::self()->recordJob(KIO::FileUndoManager::Rename, {oldUrl}, newUrl, job);
-    job->ui()->setAutoErrorHandlingEnabled(true);
+    job->uiDelegate()->setAutoErrorHandlingEnabled(true);
 }
 
 void RenameDialog::slotAccepted()
@@ -195,6 +194,13 @@ void RenameDialog::slotTextChanged(const QString& newName)
         }
     }
     m_okButton->setEnabled(enable);
+}
+
+void RenameDialog::showEvent(QShowEvent* event)
+{
+    m_lineEdit->setFocus();
+
+    QDialog::showEvent(event);
 }
 
 void RenameDialog::renameItems()

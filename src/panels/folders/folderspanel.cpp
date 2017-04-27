@@ -109,7 +109,7 @@ void FoldersPanel::rename(const KFileItem& item)
 
 bool FoldersPanel::urlChanged()
 {
-    if (!url().isValid() || url().scheme().contains("search")) {
+    if (!url().isValid() || url().scheme().contains(QStringLiteral("search"))) {
         // Skip results shown by a search, as possible identical
         // directory names are useless without parent-path information.
         return false;
@@ -240,7 +240,7 @@ void FoldersPanel::slotItemDropEvent(int index, QGraphicsSceneDragDropEvent* eve
                              event->buttons(),
                              event->modifiers());
 
-        KIO::DropJob *job = DragAndDropHelper::dropUrls(destItem.url(), &dropEvent, this);
+        KIO::DropJob *job = DragAndDropHelper::dropUrls(destItem.mostLocalUrl(), &dropEvent, this);
         if (job) {
             connect(job, &KIO::DropJob::result, this, [this](KJob *job) { if (job->error()) emit errorMessage(job->errorString()); });
         }
@@ -260,7 +260,7 @@ void FoldersPanel::slotRoleEditingFinished(int index, const QByteArray& role, co
             KIO::Job* job = KIO::moveAs(oldUrl, newUrl);
             KJobWidgets::setWindow(job, this);
             KIO::FileUndoManager::self()->recordJob(KIO::FileUndoManager::Rename, {oldUrl}, newUrl, job);
-            job->ui()->setAutoErrorHandlingEnabled(true);
+            job->uiDelegate()->setAutoErrorHandlingEnabled(true);
         }
     }
 }
@@ -274,7 +274,7 @@ void FoldersPanel::slotLoadingCompleted()
         // animations.
         // TODO: Check whether it makes sense to allow accessing the
         // view-internal delay for usecases like this.
-        QTimer::singleShot(250, this, SLOT(startFadeInAnimation()));
+        QTimer::singleShot(250, this, &FoldersPanel::startFadeInAnimation);
     }
 
     if (!m_updateCurrentItem) {

@@ -29,6 +29,8 @@
 #include <KJobWidgets>
 #include <KIO/JobUiDelegate>
 #include <KIO/PreviewJob>
+#include <KPluginLoader>
+#include <KOverlayIconPlugin>
 
 #include "private/kpixmapmodifier.h"
 #include "private/kdirectorycontentscounter.h"
@@ -46,6 +48,7 @@
     #include <Baloo/File>
     #include <Baloo/FileMonitor>
 #endif
+
 
 // #define KFILEITEMMODELROLESUPDATER_DEBUG
 
@@ -97,9 +100,9 @@ KFileItemModelRolesUpdater::KFileItemModelRolesUpdater(KFileItemModel* model, QO
 
     const KConfigGroup globalConfig(KSharedConfig::openConfig(), "PreviewSettings");
     m_enabledPlugins = globalConfig.readEntry("Plugins", QStringList()
-                                                         << "directorythumbnail"
-                                                         << "imagethumbnail"
-                                                         << "jpegthumbnail");
+                                                         << QStringLiteral("directorythumbnail")
+                                                         << QStringLiteral("imagethumbnail")
+                                                         << QStringLiteral("jpegthumbnail"));
 
     connect(m_model, &KFileItemModel::itemsInserted,
             this,    &KFileItemModelRolesUpdater::slotItemsInserted);
@@ -129,6 +132,18 @@ KFileItemModelRolesUpdater::KFileItemModelRolesUpdater(KFileItemModel* model, QO
     m_directoryContentsCounter = new KDirectoryContentsCounter(m_model, this);
     connect(m_directoryContentsCounter, &KDirectoryContentsCounter::result,
             this,                       &KFileItemModelRolesUpdater::slotDirectoryContentsCountReceived);
+
+    auto plugins = KPluginLoader::instantiatePlugins(QStringLiteral("kf5/overlayicon"), nullptr, qApp);
+    foreach (QObject *it, plugins) {
+        auto plugin = qobject_cast<KOverlayIconPlugin*>(it);
+        if (plugin) {
+            m_overlayIconsPlugin.append(plugin);
+            connect(plugin, &KOverlayIconPlugin::overlaysChanged, this, &KFileItemModelRolesUpdater::slotOverlaysChanged);
+        } else {
+            // not our/valid plugin, so delete the created object
+            it->deleteLater();
+        }
+    }
 }
 
 KFileItemModelRolesUpdater::~KFileItemModelRolesUpdater()
@@ -278,7 +293,7 @@ void KFileItemModelRolesUpdater::setRoles(const QSet<QByteArray>& roles)
             }
         }
 
-        if (hasBalooRole && !m_balooFileMonitor) {
+        if (hasBalooRole && m_balooConfig.fileIndexingEnabled() && !m_balooFileMonitor) {
             m_balooFileMonitor = new Baloo::FileMonitor(this);
             connect(m_balooFileMonitor, &Baloo::FileMonitor::fileMetaDataChanged,
                     this, &KFileItemModelRolesUpdater::applyChangedBalooRoles);
@@ -359,9 +374,9 @@ void KFileItemModelRolesUpdater::slotItemsRemoved(const KItemRangeList& itemRang
             m_balooFileMonitor->clear();
         } else {
             QStringList newFileList;
-            foreach (const QString& itemUrl, m_balooFileMonitor->files()) {
-                if (m_model->index(itemUrl) >= 0) {
-                    newFileList.append(itemUrl);
+            foreach (const QString& file, m_balooFileMonitor->files()) {
+                if (m_model->index(QUrl::fromLocalFile(file)) >= 0) {
+                    newFileList.append(file);
                 }
             }
             m_balooFileMonitor->setFiles(newFileList);
@@ -490,8 +505,12 @@ void KFileItemModelRolesUpdater::slotGotPreview(const KFileItem& item, const QPi
 
     const QString mimeType = item.mimetype();
     const int slashIndex = mimeType.indexOf(QLatin1Char('/'));
-    const QString mimeTypeGroup = mimeType.left(slashIndex);
-    if (mimeTypeGroup == QLatin1String("image")) {
+    const bool isFontPreview = mimeType.right(slashIndex).contains(QLatin1String("font"));
+    const bool isFolderPreview = item.isDir();
+    const bool isWindowsExePreview = mimeType == QLatin1String("application/x-ms-dos-executable") ||
+                                     mimeType == QLatin1String("application/x-msdownload");
+
+    if (!isFolderPreview && !isFontPreview && !isWindowsExePreview) {
         if (m_enlargeSmallPreviews) {
             KPixmapModifier::applyFrame(scaledPixmap, m_iconSize);
         } else {
@@ -620,7 +639,7 @@ void KFileItemModelRolesUpdater::resolveNextSortRole()
 
     if (!m_pendingSortRoleItems.isEmpty()) {
         applySortProgressToModel();
-        QTimer::singleShot(0, this, SLOT(resolveNextSortRole()));
+        QTimer::singleShot(0, this, &KFileItemModelRolesUpdater::resolveNextSortRole);
     } else {
         m_state = Idle;
 
@@ -655,7 +674,7 @@ void KFileItemModelRolesUpdater::resolveNextPendingRoles()
     }
 
     if (!m_pendingIndexes.isEmpty()) {
-        QTimer::singleShot(0, this, SLOT(resolveNextPendingRoles()));
+        QTimer::singleShot(0, this, &KFileItemModelRolesUpdater::resolveNextPendingRoles);
     } else {
         m_state = Idle;
 
@@ -692,17 +711,23 @@ void KFileItemModelRolesUpdater::resolveRecentlyChangedItems()
     updateChangedItems();
 }
 
-void KFileItemModelRolesUpdater::applyChangedBalooRoles(const QString& itemUrl)
+void KFileItemModelRolesUpdater::applyChangedBalooRoles(const QString& file)
 {
 #ifdef HAVE_BALOO
-    const KFileItem item = m_model->fileItem(itemUrl);
+    const KFileItem item = m_model->fileItem(QUrl::fromLocalFile(file));
 
     if (item.isNull()) {
         // itemUrl is not in the model anymore, probably because
         // the corresponding file has been deleted in the meantime.
         return;
     }
+    applyChangedBalooRolesForItem(item);
+#endif
+}
 
+void KFileItemModelRolesUpdater::applyChangedBalooRolesForItem(const KFileItem &item)
+{
+#ifdef HAVE_BALOO
     Baloo::File file(item.localPath());
     file.load();
 
@@ -730,7 +755,7 @@ void KFileItemModelRolesUpdater::applyChangedBalooRoles(const QString& itemUrl)
             this,    &KFileItemModelRolesUpdater::slotItemsChanged);
 #else
 #ifndef Q_CC_MSVC
-    Q_UNUSED(itemUrl);
+    Q_UNUSED(item);
 #endif
 #endif
 }
@@ -808,7 +833,7 @@ void KFileItemModelRolesUpdater::startUpdating()
         m_pendingIndexes = indexes;
         // Trigger the asynchronous resolving of all roles.
         m_state = ResolvingAllRoles;
-        QTimer::singleShot(0, this, SLOT(resolveNextPendingRoles()));
+        QTimer::singleShot(0, this, &KFileItemModelRolesUpdater::resolveNextPendingRoles);
     }
 }
 
@@ -843,7 +868,7 @@ void KFileItemModelRolesUpdater::startPreviewJob()
     m_state = PreviewJobRunning;
 
     if (m_pendingPreviewItems.isEmpty()) {
-        QTimer::singleShot(0, this, SLOT(slotPreviewJobFinished()));
+        QTimer::singleShot(0, this, &KFileItemModelRolesUpdater::slotPreviewJobFinished);
         return;
     }
 
@@ -886,7 +911,7 @@ void KFileItemModelRolesUpdater::startPreviewJob()
     KIO::PreviewJob* job = new KIO::PreviewJob(itemSubSet, cacheSize, &m_enabledPlugins);
 
     job->setIgnoreMaximumSize(itemSubSet.first().isLocalFile());
-    if (job->ui()) {
+    if (job->uiDelegate()) {
         KJobWidgets::setWindow(job, qApp->activeWindow());
     }
 
@@ -920,7 +945,7 @@ void KFileItemModelRolesUpdater::updateChangedItems()
             // asynchronous determination of the sort role.
             killPreviewJob();
             m_state = ResolvingSortRole;
-            QTimer::singleShot(0, this, SLOT(resolveNextSortRole()));
+            QTimer::singleShot(0, this, &KFileItemModelRolesUpdater::resolveNextSortRole);
         }
 
         return;
@@ -964,7 +989,7 @@ void KFileItemModelRolesUpdater::updateChangedItems()
         if (!resolvingInProgress) {
             // Trigger the asynchronous resolving of the changed roles.
             m_state = ResolvingAllRoles;
-            QTimer::singleShot(0, this, SLOT(resolveNextPendingRoles()));
+            QTimer::singleShot(0, this, &KFileItemModelRolesUpdater::resolveNextPendingRoles);
         }
     }
 }
@@ -1065,15 +1090,35 @@ QHash<QByteArray, QVariant> KFileItemModelRolesUpdater::rolesData(const KFileIte
         data.insert("type", item.mimeComment());
     }
 
-    data.insert("iconOverlays", item.overlays());
+    QStringList overlays = item.overlays();
+    foreach(KOverlayIconPlugin *it, m_overlayIconsPlugin) {
+        overlays.append(it->getOverlays(item.url()));
+    }
+    data.insert("iconOverlays", overlays);
 
 #ifdef HAVE_BALOO
     if (m_balooFileMonitor) {
         m_balooFileMonitor->addFile(item.localPath());
-        applyChangedBalooRoles(item.localPath());
+        applyChangedBalooRolesForItem(item);
     }
 #endif
     return data;
+}
+
+void KFileItemModelRolesUpdater::slotOverlaysChanged(const QUrl& url, const QStringList &)
+{
+    const KFileItem item = m_model->fileItem(url);
+    if (item.isNull()) {
+        return;
+    }
+    const int index = m_model->index(item);
+    QHash<QByteArray, QVariant> data =  m_model->data(index);
+    QStringList overlays = item.overlays();
+    foreach (KOverlayIconPlugin *it, m_overlayIconsPlugin) {
+        overlays.append(it->getOverlays(url));
+    }
+    data.insert("iconOverlays", overlays);
+    m_model->setData(index, data);
 }
 
 void KFileItemModelRolesUpdater::updateAllPreviews()

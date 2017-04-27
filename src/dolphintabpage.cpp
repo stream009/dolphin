@@ -40,10 +40,10 @@ DolphinTabPage::DolphinTabPage(const QUrl &primaryUrl, const QUrl &secondaryUrl,
 
     // Create a new primary view
     m_primaryViewContainer = createViewContainer(primaryUrl);
-    connect(m_primaryViewContainer->view(), SIGNAL(urlChanged(QUrl)),
-            this, SIGNAL(activeViewUrlChanged(QUrl)));
-    connect(m_primaryViewContainer->view(), SIGNAL(redirection(QUrl,QUrl)),
-            this, SLOT(slotViewUrlRedirection(QUrl,QUrl)));
+    connect(m_primaryViewContainer->view(), &DolphinView::urlChanged,
+            this, &DolphinTabPage::activeViewUrlChanged);
+    connect(m_primaryViewContainer->view(), &DolphinView::redirection,
+            this, &DolphinTabPage::slotViewUrlRedirection);
 
     m_splitter->addWidget(m_primaryViewContainer);
     m_primaryViewContainer->show();
@@ -71,13 +71,13 @@ bool DolphinTabPage::splitViewEnabled() const
     return m_splitViewEnabled;
 }
 
-void DolphinTabPage::setSplitViewEnabled(bool enabled)
+void DolphinTabPage::setSplitViewEnabled(bool enabled, const QUrl &secondaryUrl)
 {
     if (m_splitViewEnabled != enabled) {
         m_splitViewEnabled = enabled;
 
         if (enabled) {
-            const QUrl& url = m_primaryViewContainer->url();
+            const QUrl& url = (secondaryUrl.isEmpty()) ? m_primaryViewContainer->url() : secondaryUrl;
             m_secondaryViewContainer = createViewContainer(url);
 
             const bool placesSelectorVisible = m_primaryViewContainer->urlNavigator()->isPlacesSelectorVisible();
@@ -302,14 +302,14 @@ void DolphinTabPage::slotViewActivated()
     const DolphinView* newActiveView = activeViewContainer()->view();
 
     if (newActiveView != oldActiveView) {
-        disconnect(oldActiveView, SIGNAL(urlChanged(QUrl)),
-                   this, SIGNAL(activeViewUrlChanged(QUrl)));
-        disconnect(oldActiveView, SIGNAL(redirection(QUrl,QUrl)),
-                   this, SLOT(slotViewUrlRedirection(QUrl,QUrl)));
-        connect(newActiveView, SIGNAL(urlChanged(QUrl)),
-                this, SIGNAL(activeViewUrlChanged(QUrl)));
-        connect(newActiveView, SIGNAL(redirection(QUrl,QUrl)),
-                this, SLOT(slotViewUrlRedirection(QUrl,QUrl)));
+        disconnect(oldActiveView, &DolphinView::urlChanged,
+                   this, &DolphinTabPage::activeViewUrlChanged);
+        disconnect(oldActiveView, &DolphinView::redirection,
+                   this, &DolphinTabPage::slotViewUrlRedirection);
+        connect(newActiveView, &DolphinView::urlChanged,
+                this, &DolphinTabPage::activeViewUrlChanged);
+        connect(newActiveView, &DolphinView::redirection,
+                this, &DolphinTabPage::slotViewUrlRedirection);
     }
 
     emit activeViewUrlChanged(activeViewContainer()->url());
@@ -323,14 +323,29 @@ void DolphinTabPage::slotViewUrlRedirection(const QUrl& oldUrl, const QUrl& newU
     emit activeViewUrlChanged(newUrl);
 }
 
+void DolphinTabPage::switchActiveView()
+{
+    if (!m_splitViewEnabled) {
+        return;
+    }
+    if (m_primaryViewActive) {
+       m_secondaryViewContainer->setActive(true);
+    } else {
+       m_primaryViewContainer->setActive(true);
+    }
+}
+
 DolphinViewContainer* DolphinTabPage::createViewContainer(const QUrl& url) const
 {
     DolphinViewContainer* container = new DolphinViewContainer(url, m_splitter);
     container->setActive(false);
 
     const DolphinView* view = container->view();
-    connect(view, SIGNAL(activated()),
-            this, SLOT(slotViewActivated()));
+    connect(view, &DolphinView::activated,
+            this, &DolphinTabPage::slotViewActivated);
+
+    connect(view, &DolphinView::toggleActiveViewRequested,
+            this, &DolphinTabPage::switchActiveView);
 
     return container;
 }

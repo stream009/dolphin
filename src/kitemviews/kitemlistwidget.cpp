@@ -179,8 +179,8 @@ QList<QByteArray> KItemListWidget::visibleRoles() const
 
 void KItemListWidget::setColumnWidth(const QByteArray& role, qreal width)
 {
-    if (m_columnWidths.value(role) != width) {
-        const qreal previousWidth = width;
+    const qreal previousWidth = m_columnWidths.value(role);
+    if (previousWidth != width) {
         m_columnWidths.insert(role, width);
         columnWidthChanged(role, width, previousWidth);
         update();
@@ -516,10 +516,10 @@ void KItemListWidget::clearHoverCache()
 
 void KItemListWidget::drawItemStyleOption(QPainter* painter, QWidget* widget, QStyle::State styleState)
 {
-    QStyleOptionViewItemV4 viewItemOption;
+    QStyleOptionViewItem viewItemOption;
     viewItemOption.initFrom(widget);
     viewItemOption.state = styleState;
-    viewItemOption.viewItemPosition = QStyleOptionViewItemV4::OnlyOne;
+    viewItemOption.viewItemPosition = QStyleOptionViewItem::OnlyOne;
     viewItemOption.showDecorationSelected = true;
     viewItemOption.rect = selectionRect().toRect();
     widget->style()->drawPrimitive(QStyle::PE_PanelItemViewItem, &viewItemOption, painter, widget);

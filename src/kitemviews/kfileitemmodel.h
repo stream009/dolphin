@@ -273,21 +273,21 @@ private slots:
     void slotItemsDeleted(const KFileItemList& items);
     void slotRefreshItems(const QList<QPair<KFileItem, KFileItem> >& items);
     void slotClear();
-    void slotNaturalSortingChanged();
+    void slotSortingChoiceChanged();
 
     void dispatchPendingItemsToInsert();
 
 private:
     enum RoleType {
         // User visible roles:
-        NoRole, NameRole, SizeRole, DateRole, PermissionsRole, OwnerRole,
+        NoRole, NameRole, SizeRole, ModificationTimeRole, AccessTimeRole, PermissionsRole, OwnerRole,
         GroupRole, TypeRole, DestinationRole, PathRole,
         // User visible roles available with Baloo:
         CommentRole, TagsRole, RatingRole, ImageSizeRole, OrientationRole,
-        WordCountRole, LineCountRole, ArtistRole, AlbumRole, DurationRole, TrackRole,
-        CopiedFromRole,
+        WordCountRole, TitleRole, LineCountRole, ArtistRole, AlbumRole, DurationRole, TrackRole,
+        OriginUrlRole,
         // Non-visible roles:
-        IsDirRole, IsLinkRole, IsExpandedRole, IsExpandableRole, ExpandedParentsCountRole,
+        IsDirRole, IsLinkRole, IsHiddenRole, IsExpandedRole, IsExpandableRole, ExpandedParentsCountRole,
         // Mandatory last entry:
         RolesCount
     };
@@ -383,7 +383,7 @@ private:
 
     QList<QPair<int, QVariant> > nameRoleGroups() const;
     QList<QPair<int, QVariant> > sizeRoleGroups() const;
-    QList<QPair<int, QVariant> > dateRoleGroups() const;
+    QList<QPair<int, QVariant> > timeRoleGroups(KFileItem::FileTimes which) const;
     QList<QPair<int, QVariant> > permissionRoleGroups() const;
     QList<QPair<int, QVariant> > ratingRoleGroups() const;
     QList<QPair<int, QVariant> > genericStringRoleGroups(const QByteArray& typeForRole) const;
@@ -414,6 +414,11 @@ private:
      * or collapsed via setExpanded(parentIndex, false).
      */
     void removeFilteredChildren(const KItemRangeList& parents);
+
+    /**
+     * Loads the selected choice of sorting method from Dolphin General Settings
+     */
+    void loadSortingSettings();
 
     /**
      * Maps the QByteArray-roles to RoleTypes and provides translation- and

@@ -17,14 +17,22 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <QApplication>
+#include <QIcon>
+
+#include <KRun>
+
 #include "global.h"
 #include "dolphindebug.h"
 
+#include "dolphin_generalsettings.h"
+
 QList<QUrl> Dolphin::validateUris(const QStringList& uriList)
 {
+    const QString currentDir = QDir::currentPath();
     QList<QUrl> urls;
     foreach (const QString& str, uriList) {
-        const QUrl url = QUrl::fromUserInput(str, QString(), QUrl::AssumeLocalFile);
+        const QUrl url = QUrl::fromUserInput(str, currentDir, QUrl::AssumeLocalFile);
         if (url.isValid()) {
             urls.append(url);
         } else {
@@ -32,4 +40,24 @@ QList<QUrl> Dolphin::validateUris(const QStringList& uriList)
         }
     }
     return urls;
+}
+
+QUrl Dolphin::homeUrl()
+{
+    return QUrl::fromUserInput(GeneralSettings::homeUrl(), QString(), QUrl::AssumeLocalFile);
+}
+
+void Dolphin::openNewWindow(const QList<QUrl> &urls, QWidget *window, const OpenNewWindowFlags &flags)
+{
+    QString command = QStringLiteral("dolphin");
+
+    if (flags.testFlag(OpenNewWindowFlag::Select)) {
+        command.append(QLatin1String(" --select"));
+    }
+
+    if (!urls.isEmpty()) {
+        command.append(QLatin1String(" %U"));
+    }
+
+    KRun::run(command, urls, window, qApp->applicationDisplayName(), qApp->windowIcon().name());
 }

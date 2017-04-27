@@ -8,7 +8,7 @@
     <include>QUrl</include>
     <include>KCompletion</include>
     <kcfgfile name="dolphinrc"/>
-    <signal name="naturalSortingChanged" />
+    <signal name="sortingChoiceChanged" />
     <group name="General">
         <entry name="EditableUrl" type="Bool">
             <label>Should the URL be editable for the user</label>
@@ -20,6 +20,10 @@
         </entry>
         <entry name="ShowFullPath" type="Bool">
             <label>Should the full path be shown inside the location bar</label>
+            <default>false</default>
+        </entry>
+        <entry name="ShowFullPathInTitlebar" type="Bool">
+            <label>Should the full path be shown in the title bar</label>
             <default>false</default>
         </entry>
         <entry name="Version" type="Int">
@@ -43,7 +47,7 @@
             <default>false</default>
         </entry>
         <entry name="GlobalViewProps" type="Bool">
-            <label>Should the view properties be used for all directories</label>
+            <label>Should the view properties be used for all folders</label>
             <default>false</default>
         </entry>
         <entry name="BrowseThroughArchives" type="Bool">
@@ -61,6 +65,10 @@
         <entry name="ShowSelectionToggle" type="Bool">
             <label>Show selection toggle</label>
             <default>true</default>
+        </entry>
+        <entry name="UseTabForSwitchingSplitView" type="Bool">
+            <label>Use tab for switching between right and left split</label>
+            <default>false</default>
         </entry>
         <entry name="ShowToolTips" type="Bool">
             <label>Show tooltips</label>
@@ -93,10 +101,15 @@
             <label>Enlarge Small Previews</label>
             <default>true</default>
         </entry>
-        <entry name="NaturalSorting" type="Bool">
-            <label>Natural sorting of items</label>
-            <default>true</default>
-            <emit signal="naturalSortingChanged" />
+        <entry name="SortingChoice" type="Enum">
+            <choices>
+                <choice name="NaturalSorting" />
+                <choice name="CaseInsensitiveSorting" />
+                <choice name="CaseSensitiveSorting" />
+            </choices>
+            <label>Choose Natural, Case Sensitive, or Case Insensitive order of sorting the items</label>
+            <default>0</default>
+            <emit signal="sortingChoiceChanged" />
         </entry>
     </group>
 </kcfg>

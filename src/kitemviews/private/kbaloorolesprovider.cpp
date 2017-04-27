@@ -109,6 +109,9 @@ QHash<QByteArray, QVariant> KBalooRolesProvider::roleValues(const Baloo::File& f
     if (roles.contains("comment")) {
         values.insert("comment", md.userComment());
     }
+    if (roles.contains("originUrl")) {
+        values.insert("originUrl", md.originUrl());
+    }
 
     return values;
 }
@@ -135,6 +138,7 @@ KBalooRolesProvider::KBalooRolesProvider() :
         { "rating", "rating" },
         { "tag",        "tags" },
         { "comment",   "comment" },
+        { "title",         "title" },
         { "wordCount",     "wordCount" },
         { "lineCount",     "lineCount" },
         { "width",         "imageSize" },
@@ -143,8 +147,8 @@ KBalooRolesProvider::KBalooRolesProvider() :
         { "artist",     "artist" },
         { "album",    "album" },
         { "duration",      "duration" },
-        { "trackNumber",   "track" }
-        // { "http://www.semanticdesktop.org/ontologies/2010/04/30/ndo#copiedFrom",    "copiedFrom" }
+        { "trackNumber",   "track" },
+        { "originUrl", "originUrl" }
     };
 
     for (unsigned int i = 0; i < sizeof(propertyInfoList) / sizeof(PropertyInfo); ++i) {
@@ -155,7 +159,7 @@ KBalooRolesProvider::KBalooRolesProvider() :
 
 QString KBalooRolesProvider::tagsFromValues(const QStringList& values) const
 {
-    return values.join(", ");
+    return values.join(QStringLiteral(", "));
 }
 
 QString KBalooRolesProvider::orientationFromValue(int value) const
@@ -178,8 +182,8 @@ QString KBalooRolesProvider::orientationFromValue(int value) const
 
 QString KBalooRolesProvider::durationFromValue(int value) const
 {
-    QTime duration;
+    QTime duration(0, 0, 0);
     duration = duration.addSecs(value);
-    return duration.toString("hh:mm:ss");
+    return duration.toString(QStringLiteral("hh:mm:ss"));
 }
 

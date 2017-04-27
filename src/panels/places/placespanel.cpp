@@ -73,7 +73,7 @@ PlacesPanel::~PlacesPanel()
 
 bool PlacesPanel::urlChanged()
 {
-    if (!url().isValid() || url().scheme().contains("search")) {
+    if (!url().isValid() || url().scheme().contains(QStringLiteral("search"))) {
         // Skip results shown by a search, as possible identical
         // directory names are useless without parent-path information.
         return false;
@@ -160,8 +160,6 @@ void PlacesPanel::slotItemContextMenuRequested(int index, const QPointF& pos)
     QMenu menu(this);
 
     QAction* emptyTrashAction = 0;
-    QAction* addAction = 0;
-    QAction* mainSeparator = 0;
     QAction* editAction = 0;
     QAction* teardownAction = 0;
     QAction* ejectAction = 0;
@@ -169,6 +167,7 @@ void PlacesPanel::slotItemContextMenuRequested(int index, const QPointF& pos)
     const QString label = item->text();
 
     const bool isDevice = !item->udi().isEmpty();
+    const bool isTrash = (item->url().scheme() == QLatin1String("trash"));
     if (isDevice) {
         ejectAction = m_model->ejectAction(index);
         if (ejectAction) {
@@ -183,46 +182,82 @@ void PlacesPanel::slotItemContextMenuRequested(int index, const QPointF& pos)
         }
 
         if (teardownAction || ejectAction) {
-            mainSeparator = menu.addSeparator();
-        }
-    } else {
-        if (item->url() == QUrl("trash:/")) {
-            emptyTrashAction = menu.addAction(QIcon::fromTheme("trash-empty"), i18nc("@action:inmenu", "Empty Trash"));
-            emptyTrashAction->setEnabled(item->icon() == "user-trash-full");
             menu.addSeparator();
         }
-        addAction = menu.addAction(QIcon::fromTheme("document-new"), i18nc("@item:inmenu", "Add Entry..."));
-        mainSeparator = menu.addSeparator();
-        editAction = menu.addAction(QIcon::fromTheme("document-properties"), i18nc("@item:inmenu", "Edit '%1'...", label));
+    } else {
+        if (isTrash) {
+            emptyTrashAction = menu.addAction(QIcon::fromTheme(QStringLiteral("trash-empty")), i18nc("@action:inmenu", "Empty Trash"));
+            emptyTrashAction->setEnabled(item->icon() == QLatin1String("user-trash-full"));
+            menu.addSeparator();
+        }
     }
 
-    if (!addAction) {
-        addAction = menu.addAction(QIcon::fromTheme("document-new"), i18nc("@item:inmenu", "Add Entry..."));
+    QAction* openInNewTabAction = menu.addAction(QIcon::fromTheme("tab-new"), i18nc("@item:inmenu", "Open in New Tab"));
+    if (!isDevice && !isTrash) {
+        menu.addSeparator();
     }
 
-    QAction* openInNewTabAction = menu.addAction(i18nc("@item:inmenu", "Open '%1' in New Tab", label));
-    openInNewTabAction->setIcon(QIcon::fromTheme("tab-new"));
+    editAction = menu.addAction(QIcon::fromTheme("document-properties"), i18nc("@item:inmenu", "Edit..."));
 
     QAction* removeAction = 0;
     if (!isDevice && !item->isSystemItem()) {
-        removeAction = menu.addAction(QIcon::fromTheme("edit-delete"), i18nc("@item:inmenu", "Remove '%1'", label));
+        removeAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18nc("@item:inmenu", "Remove"));
     }
 
-    QAction* hideAction = menu.addAction(i18nc("@item:inmenu", "Hide '%1'", label));
+    QAction* hideAction = menu.addAction(i18nc("@item:inmenu", "Hide"));
     hideAction->setCheckable(true);
     hideAction->setChecked(item->isHidden());
 
+    QAction* action = menu.exec(pos.toPoint());
+    if (action) {
+        if (action == emptyTrashAction) {
+            emptyTrash();
+        } else {
+            // The index might have changed if devices were added/removed while
+            // the context menu was open.
+            index = m_model->index(item);
+            if (index < 0) {
+                // The item is not in the model any more, probably because it was an
+                // external device that has been removed while the context menu was open.
+                return;
+            }
+
+            if (action == editAction) {
+                editEntry(index);
+            } else if (action == removeAction) {
+                m_model->removeItem(index);
+                m_model->saveBookmarks();
+            } else if (action == hideAction) {
+                item->setHidden(hideAction->isChecked());
+                m_model->saveBookmarks();
+            } else if (action == openInNewTabAction) {
+                // TriggerItem does set up the storage first and then it will
+                // emit the slotItemMiddleClicked signal, because of Qt::MiddleButton.
+                triggerItem(index, Qt::MiddleButton);
+            } else if (action == teardownAction) {
+                m_model->requestTeardown(index);
+            } else if (action == ejectAction) {
+                m_model->requestEject(index);
+            }
+        }
+    }
+
+    selectClosestItem();
+}
+
+void PlacesPanel::slotViewContextMenuRequested(const QPointF& pos)
+{
+    QMenu menu(this);
+
+    QAction* addAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-new")), i18nc("@item:inmenu", "Add Entry..."));
+
     QAction* showAllAction = 0;
     if (m_model->hiddenCount() > 0) {
-        if (!mainSeparator) {
-            mainSeparator = menu.addSeparator();
-        }
         showAllAction = menu.addAction(i18nc("@item:inmenu", "Show All Entries"));
         showAllAction->setCheckable(true);
         showAllAction->setChecked(m_model->hiddenItemsShown());
     }
 
-    menu.addSeparator();
     QMenu* iconSizeSubMenu = new QMenu(i18nc("@item:inmenu", "Icon Size"), &menu);
 
     struct IconSizeInfo
@@ -264,71 +299,12 @@ void PlacesPanel::slotItemContextMenuRequested(int index, const QPointF& pos)
 
     QAction* action = menu.exec(pos.toPoint());
     if (action) {
-        if (action == emptyTrashAction) {
-            emptyTrash();
-        } else if (action == addAction) {
+        if (action == addAction) {
             addEntry();
         } else if (action == showAllAction) {
             m_model->setHiddenItemsShown(showAllAction->isChecked());
         } else if (iconSizeActionMap.contains(action)) {
             m_view->setIconSize(iconSizeActionMap.value(action));
-        } else {
-            // The index might have changed if devices were added/removed while
-            // the context menu was open.
-            index = m_model->index(item);
-            if (index < 0) {
-                // The item is not in the model any more, probably because it was an
-                // external device that has been removed while the context menu was open.
-                return;
-            }
-
-            if (action == editAction) {
-                editEntry(index);
-            } else if (action == removeAction) {
-                m_model->removeItem(index);
-                m_model->saveBookmarks();
-            } else if (action == hideAction) {
-                item->setHidden(hideAction->isChecked());
-                m_model->saveBookmarks();
-            } else if (action == openInNewTabAction) {
-                // TriggerItem does set up the storage first and then it will
-                // emit the slotItemMiddleClicked signal, because of Qt::MiddleButton.
-                triggerItem(index, Qt::MiddleButton);
-            } else if (action == teardownAction) {
-                m_model->requestTeardown(index);
-            } else if (action == ejectAction) {
-                m_model->requestEject(index);
-            }
-        }
-    }
-
-    selectClosestItem();
-}
-
-void PlacesPanel::slotViewContextMenuRequested(const QPointF& pos)
-{
-    QMenu menu(this);
-
-    QAction* addAction = menu.addAction(QIcon::fromTheme("document-new"), i18nc("@item:inmenu", "Add Entry..."));
-
-    QAction* showAllAction = 0;
-    if (m_model->hiddenCount() > 0) {
-        showAllAction = menu.addAction(i18nc("@item:inmenu", "Show All Entries"));
-        showAllAction->setCheckable(true);
-        showAllAction->setChecked(m_model->hiddenItemsShown());
-    }
-
-    menu.addSeparator();
-    foreach (QAction* action, customContextMenuActions()) {
-        menu.addAction(action);
-    }
-
-    QAction* action = menu.exec(pos.toPoint());
-    if (action) {
-        if (action == addAction) {
-            addEntry();
-        } else if (action == showAllAction) {
-            m_model->setHiddenItemsShown(showAllAction->isChecked());
         }
     }
 
@@ -421,7 +397,7 @@ void PlacesPanel::slotTrashUpdated(KJob* job)
         emit errorMessage(job->errorString());
     }
     // as long as KIO doesn't do this, do it ourselves
-    KNotification::event("Trash: emptied", QString(), QPixmap(), 0, KNotification::DefaultEvent);
+    KNotification::event(QStringLiteral("Trash: emptied"), QString(), QPixmap(), 0, KNotification::DefaultEvent);
 }
 
 void PlacesPanel::slotStorageSetupDone(int index, bool success)
@@ -457,7 +433,7 @@ void PlacesPanel::emptyTrash()
 void PlacesPanel::addEntry()
 {
     const int index = m_controller->selectionManager()->currentItem();
-    const QUrl url = m_model->data(index).value("url").value<QUrl>();
+    const QUrl url = m_model->data(index).value("url").toUrl();
 
     QPointer<PlacesItemEditDialog> dialog = new PlacesItemEditDialog(this);
     dialog->setWindowTitle(i18nc("@title:window", "Add Places Entry"));
@@ -480,7 +456,7 @@ void PlacesPanel::editEntry(int index)
     dialog->setWindowTitle(i18nc("@title:window", "Edit Places Entry"));
     dialog->setIcon(data.value("iconName").toString());
     dialog->setText(data.value("text").toString());
-    dialog->setUrl(data.value("url").value<QUrl>());
+    dialog->setUrl(data.value("url").toUrl());
     dialog->setAllowGlobal(true);
     if (dialog->exec() == QDialog::Accepted) {
         PlacesItem* oldItem = m_model->placesItem(index);
@@ -522,7 +498,7 @@ void PlacesPanel::triggerItem(int index, Qt::MouseButton button)
     } else {
         m_triggerStorageSetupButton = Qt::NoButton;
 
-        const QUrl url = m_model->data(index).value("url").value<QUrl>();
+        const QUrl url = m_model->data(index).value("url").toUrl();
         if (!url.isEmpty()) {
             if (button == Qt::MiddleButton) {
                 emit placeMiddleClicked(PlacesItemModel::convertedUrl(url));

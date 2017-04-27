@@ -64,7 +64,7 @@ public:
 
     qreal minimumColumnWidth() const;
 
-    virtual void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = 0);
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = 0) Q_DECL_OVERRIDE;
 
 signals:
     /**
@@ -74,6 +74,13 @@ signals:
     void columnWidthChanged(const QByteArray& role,
                             qreal currentWidth,
                             qreal previousWidth);
+
+    /**
+     * Is emitted if the user has released the mouse button after adjusting the
+     * width of a visible role.
+     */
+    void columnWidthChangeFinished(const QByteArray& role,
+                                   qreal currentWidth);
 
     /**
      * Is emitted if the position of the column has been changed.
@@ -97,13 +104,13 @@ signals:
     void sortRoleChanged(const QByteArray& current, const QByteArray& previous);
 
 protected:
-    virtual void mousePressEvent(QGraphicsSceneMouseEvent* event);
-    virtual void mouseReleaseEvent(QGraphicsSceneMouseEvent* event);
-    virtual void mouseMoveEvent(QGraphicsSceneMouseEvent* event);
-    virtual void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event);
-    virtual void hoverEnterEvent(QGraphicsSceneHoverEvent* event);
-    virtual void hoverLeaveEvent(QGraphicsSceneHoverEvent* event);
-    virtual void hoverMoveEvent(QGraphicsSceneHoverEvent* event);
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) Q_DECL_OVERRIDE;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) Q_DECL_OVERRIDE;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent* event) Q_DECL_OVERRIDE;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) Q_DECL_OVERRIDE;
+    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) Q_DECL_OVERRIDE;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) Q_DECL_OVERRIDE;
+    void hoverMoveEvent(QGraphicsSceneHoverEvent* event) Q_DECL_OVERRIDE;
 
 private slots:
     void slotSortRoleChanged(const QByteArray& current, const QByteArray& previous);

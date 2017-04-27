@@ -80,7 +80,7 @@ QString KFileItemListWidgetInformant::roleText(const QByteArray& role,
             const KIO::filesize_t size = roleValue.value<KIO::filesize_t>();
             text = KFormat().formatByteSize(size);
         }
-    } else if (role == "date") {
+    } else if (role == "modificationtime" || role == "accesstime") {
         const QDateTime dateTime = roleValue.toDateTime();
         text = QLocale().toString(dateTime, QLocale::ShortFormat);
     } else {
@@ -120,7 +120,7 @@ bool KFileItemListWidget::isRoleRightAligned(const QByteArray& role) const
 
 bool KFileItemListWidget::isHidden() const
 {
-    return data().value("text").toString().startsWith(QLatin1Char('.'));
+    return data().value("isHidden").toBool();
 }
 
 QFont KFileItemListWidget::customizedFont(const QFont& baseFont) const

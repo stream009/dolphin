@@ -73,8 +73,10 @@ QAccessibleInterface* KItemListViewAccessible::cell(int index) const
         return 0;
     }
 
-    if (m_cells.size() < index - 1)
+    if (m_cells.size() <= index) {
         m_cells.resize(childCount());
+    }
+    Q_ASSERT(index < m_cells.size());
 
     QAccessibleInterface* child = m_cells.at(index);
     if (!child) {
@@ -146,7 +148,9 @@ QString KItemListViewAccessible::rowDescription(int) const
 QList<QAccessibleInterface*> KItemListViewAccessible::selectedCells() const
 {
     QList<QAccessibleInterface*> cells;
-    Q_FOREACH (int index, view()->controller()->selectionManager()->selectedItems()) {
+    const auto items = view()->controller()->selectionManager()->selectedItems();
+    cells.reserve(items.count());
+    for (int index : items) {
         cells.append(cell(index));
     }
     return cells;
@@ -248,7 +252,7 @@ QRect KItemListViewAccessible::rect() const
 
     const QGraphicsScene* scene = view()->scene();
     if (scene) {
-        const QPoint origin = scene->views()[0]->mapToGlobal(QPoint(0, 0));
+        const QPoint origin = scene->views().at(0)->mapToGlobal(QPoint(0, 0));
         const QRect viewRect = view()->geometry().toRect();
         return viewRect.translated(origin);
     } else {

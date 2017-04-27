@@ -19,6 +19,7 @@
 
 #include "startupsettingspage.h"
 
+#include "global.h"
 #include "dolphinmainwindow.h"
 #include "dolphinviewcontainer.h"
 
@@ -45,7 +46,8 @@ StartupSettingsPage::StartupSettingsPage(const QUrl& url, QWidget* parent) :
     m_splitView(0),
     m_editableUrl(0),
     m_showFullPath(0),
-    m_filterBar(0)
+    m_filterBar(0),
+    m_showFullPathInTitlebar(0)
 {
     QVBoxLayout* topLayout = new QVBoxLayout(this);
     QWidget* vBox = new QWidget(this);
@@ -67,7 +69,7 @@ StartupSettingsPage::StartupSettingsPage(const QUrl& url, QWidget* parent) :
     homeUrlBoxLayout->addWidget(m_homeUrl);
     m_homeUrl->setClearButtonEnabled(true);
 
-    QPushButton* selectHomeUrlButton = new QPushButton(QIcon::fromTheme("folder-open"), QString(), homeUrlBox);
+    QPushButton* selectHomeUrlButton = new QPushButton(QIcon::fromTheme(QStringLiteral("folder-open")), QString(), homeUrlBox);
     homeUrlBoxLayout->addWidget(selectHomeUrlButton);
 
 #ifndef QT_NO_ACCESSIBILITY
@@ -103,6 +105,8 @@ StartupSettingsPage::StartupSettingsPage(const QUrl& url, QWidget* parent) :
     vBoxLayout->addWidget(m_showFullPath);
     m_filterBar = new QCheckBox(i18nc("@option:check Startup Settings", "Show filter bar"), vBox);
     vBoxLayout->addWidget(m_filterBar);
+    m_showFullPathInTitlebar = new QCheckBox(i18nc("@option:check Startup Settings", "Show full path in title bar"), vBox);
+    vBoxLayout->addWidget(m_showFullPathInTitlebar);
 
     // Add a dummy widget with no restriction regarding
     // a vertical resizing. This assures that the dialog layout
@@ -118,6 +122,7 @@ StartupSettingsPage::StartupSettingsPage(const QUrl& url, QWidget* parent) :
     connect(m_editableUrl,  &QCheckBox::toggled, this, &StartupSettingsPage::slotSettingsChanged);
     connect(m_showFullPath, &QCheckBox::toggled, this, &StartupSettingsPage::slotSettingsChanged);
     connect(m_filterBar,    &QCheckBox::toggled, this, &StartupSettingsPage::slotSettingsChanged);
+    connect(m_showFullPathInTitlebar, &QCheckBox::toggled, this, &StartupSettingsPage::slotSettingsChanged);
 }
 
 StartupSettingsPage::~StartupSettingsPage()
@@ -128,7 +133,7 @@ void StartupSettingsPage::applySettings()
 {
     GeneralSettings* settings = GeneralSettings::self();
 
-    const QUrl url(QUrl::fromLocalFile(m_homeUrl->text()));
+    const QUrl url(QUrl::fromUserInput(m_homeUrl->text(), QString(), QUrl::AssumeLocalFile));
     KFileItem fileItem(url);
     if ((url.isValid() && fileItem.isDir()) || (url.scheme() == QLatin1String("timeline"))) {
         settings->setHomeUrl(url.toDisplayString(QUrl::PreferLocalFile));
@@ -140,6 +145,7 @@ void StartupSettingsPage::applySettings()
     settings->setEditableUrl(m_editableUrl->isChecked());
     settings->setShowFullPath(m_showFullPath->isChecked());
     settings->setFilterBar(m_filterBar->isChecked());
+    settings->setShowFullPathInTitlebar(m_showFullPathInTitlebar->isChecked());
 
     settings->save();
 }
@@ -163,8 +169,8 @@ void StartupSettingsPage::slotSettingsChanged()
 
 void StartupSettingsPage::selectHomeUrl()
 {
-    const QString homeUrl = m_homeUrl->text();
-    QUrl url = QFileDialog::getExistingDirectoryUrl(this, QString(), QUrl::fromLocalFile(homeUrl));
+    const QUrl homeUrl(QUrl::fromUserInput(m_homeUrl->text(), QString(), QUrl::AssumeLocalFile));
+    QUrl url = QFileDialog::getExistingDirectoryUrl(this, QString(), homeUrl);
     if (!url.isEmpty()) {
         m_homeUrl->setText(url.toDisplayString(QUrl::PreferLocalFile));
         slotSettingsChanged();
@@ -183,10 +189,11 @@ void StartupSettingsPage::useDefaultLocation()
 
 void StartupSettingsPage::loadSettings()
 {
-    const QUrl url(QUrl::fromLocalFile(GeneralSettings::homeUrl()));
+    const QUrl url(Dolphin::homeUrl());
     m_homeUrl->setText(url.toDisplayString(QUrl::PreferLocalFile));
     m_splitView->setChecked(GeneralSettings::splitView());
     m_editableUrl->setChecked(GeneralSettings::editableUrl());
     m_showFullPath->setChecked(GeneralSettings::showFullPath());
     m_filterBar->setChecked(GeneralSettings::filterBar());
+    m_showFullPathInTitlebar->setChecked(GeneralSettings::showFullPathInTitlebar());
 }
