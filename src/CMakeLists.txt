@@ -110,6 +110,7 @@ set(dolphinprivate_LIB_SRCS
     views/viewproperties.cpp
     views/zoomlevelinfo.cpp
     dolphinremoveaction.cpp
+    middleclickactioneventfilter.cpp
     dolphinnewfilemenu.cpp
     dolphindebug.cpp
 )
@@ -180,6 +181,8 @@ set(dolphinpart_SRCS
    dolphindebug.cpp
 )
 
+qt5_add_resources(dolphinpart_SRCS dolphinpart.qrc)
+
 add_library(dolphinpart MODULE ${dolphinpart_SRCS})
 
 target_link_libraries(dolphinpart
@@ -188,12 +191,11 @@ target_link_libraries(dolphinpart
 
 install(TARGETS dolphinpart DESTINATION ${KDE_INSTALL_PLUGINDIR})
 
-install(FILES dolphinpart.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/dolphinpart)
 install(FILES dolphinpart.desktop DESTINATION ${KDE_INSTALL_KSERVICES5DIR})
 
 ##########################################
 
-set(dolphin_SRCS
+set(dolphinstatic_SRCS
     dolphindockwidget.cpp
     dolphinmainwindow.cpp
     dolphinviewcontainer.cpp
@@ -248,12 +250,11 @@ set(dolphin_SRCS
     statusbar/statusbarspaceinfo.cpp
     views/zoomlevelinfo.cpp
     dolphindebug.cpp
-    dbusinterface.cpp
     global.cpp
     dolphinplacesmodel.cpp
 )
 
-kconfig_add_kcfg_files(dolphin_SRCS GENERATE_MOC
+kconfig_add_kcfg_files(dolphinstatic_SRCS GENERATE_MOC
     panels/folders/dolphin_folderspanelsettings.kcfgc
     panels/information/dolphin_informationpanelsettings.kcfgc
     panels/places/dolphin_placespanelsettings.kcfgc
@@ -266,8 +267,33 @@ kconfig_add_kcfg_files(dolphin_SRCS GENERATE_MOC
 )
 
 if(NOT WIN32)
-   set(dolphin_SRCS ${dolphin_SRCS} panels/terminal/terminalpanel.cpp)
+   set(dolphinstatic_SRCS ${dolphinstatic_SRCS} panels/terminal/terminalpanel.cpp)
 endif()
+
+qt5_add_resources(dolphinstatic_SRCS dolphin.qrc)
+
+add_library(dolphinstatic STATIC ${dolphinstatic_SRCS})
+
+target_include_directories(dolphinstatic PRIVATE ${PHONON_INCLUDES})
+target_link_libraries(dolphinstatic
+    dolphinprivate
+    KF5::KCMUtils
+    KF5::DBusAddons
+    KF5::Notifications
+    Phonon::phonon4qt5
+)
+
+if (KF5Activities_FOUND)
+    target_link_libraries(
+        dolphinstatic
+        KF5::Activities
+    )
+endif()
+
+set(dolphin_SRCS
+    dbusinterface.cpp
+    main.cpp
+)
 
 # Sets the icon on Windows and OSX
 file(GLOB ICONS_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/icons/*system-file-manager.png")
@@ -275,26 +301,11 @@ ecm_add_app_icon(dolphin_SRCS ICONS ${ICONS_SRCS})
 
 kf5_add_kdeinit_executable(dolphin ${dolphin_SRCS})
 
-target_include_directories(kdeinit_dolphin PRIVATE ${PHONON_INCLUDES})
 
 target_link_libraries(kdeinit_dolphin
+    dolphinstatic
     dolphinprivate
-    KF5::Parts
-    KF5::KCMUtils
-    KF5::Solid
-    KF5::CoreAddons
-    KF5::DBusAddons
-    KF5::Bookmarks
-    KF5::Notifications
-    Phonon::phonon4qt5
 )
-
-if (KF5Activities_FOUND)
-    target_link_libraries(
-        kdeinit_dolphin
-        KF5::Activities
-    )
-endif()
 
 include(DbusInterfaceMacros)
 
@@ -383,7 +394,6 @@ install( FILES settings/dolphin_directoryviewpropertysettings.kcfg
                settings/dolphin_detailsmodesettings.kcfg
                settings/dolphin_versioncontrolsettings.kcfg
          DESTINATION ${KDE_INSTALL_KCFGDIR} )
-install( FILES dolphinui.rc DESTINATION ${KDE_INSTALL_KXMLGUI5DIR}/dolphin )
 install( FILES org.kde.dolphin.appdata.xml DESTINATION ${KDE_INSTALL_METAINFODIR} )
 install( FILES settings/kcm/kcmdolphinviewmodes.desktop DESTINATION
 ${KDE_INSTALL_KSERVICES5DIR} )

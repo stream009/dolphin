@@ -46,6 +46,10 @@ class KJob;
 class KNewFileMenu;
 class QToolButton;
 class QIcon;
+class PlacesPanel;
+#ifndef Q_OS_WIN
+class TerminalPanel;
+#endif
 
 /**
  * @short Main window for Dolphin.
@@ -89,6 +93,8 @@ public:
      * with other menus (e. g. a context menu).
      */
     KNewFileMenu* newFileMenu() const;
+
+    void setTabsToHomeIfMountPathOpen(const QString& mountPath);
 
 public slots:
     /**
@@ -267,28 +273,17 @@ private slots:
     /** Changes the location to the home URL. */
     void goHome();
 
-    /**
-     * Open the previous URL in the URL history in a new tab
-     * if the middle mouse button is clicked.
-     */
-    void goBack(Qt::MouseButtons buttons);
+    /** Open the previous URL in the URL history in a new tab. */
+    void goBackInNewTab();
 
-    /**
-     * Open the next URL in the URL history in a new tab
-     * if the middle mouse button is clicked.
-     */
-    void goForward(Qt::MouseButtons buttons);
+    /** Open the next URL in the URL history in a new tab. */
+    void goForwardInNewTab();
 
-    /**
-     * Open the URL one hierarchy above the current URL in a new tab
-     * if the middle mouse button is clicked.
-     */
-    void goUp(Qt::MouseButtons buttons);
+    /** Open the URL one hierarchy above the current URL in a new tab. */
+    void goUpInNewTab();
 
-    /**
-     * Open the home URL in a new tab
-     */
-    void goHome(Qt::MouseButtons buttons);
+    /** * Open the home URL in a new tab. */
+    void goHomeInNewTab();
 
     /** Opens Kompare for 2 selected files. */
     void compareFiles();
@@ -421,9 +416,32 @@ private slots:
     void setUrlAsCaption(const QUrl& url);
 
     /**
+     * This slot is called when the user requested to unmount a removable media
+     * from the places menu
+     */
+    void slotStorageTearDownFromPlacesRequested(const QString& mountPath);
+
+    /**
+     * This slot is called when the user requested to unmount a removable media
+     * _not_ from the dolphin's places menu (from the notification area for e.g.)
+     * This slot is basically connected to each removable device's
+     * Solid::StorageAccess::teardownRequested(const QString & udi)
+     * signal through the places panel.
+     */
+    void slotStorageTearDownExternallyRequested(const QString& mountPath);
+
+    /**
      * Is called when the view has finished loading the directory.
      */
     void slotDirectoryLoadingCompleted();
+
+    /**
+     * Is called when the user middle clicks a toolbar button.
+     *
+     * Here middle clicking Back/Forward/Up/Home will open the resulting
+     * folder in a new tab.
+     */
+    void slotToolBarActionMiddleClicked(QAction *action);
 
 private:
     void setupActions();
@@ -499,6 +517,12 @@ private:
     QTimer* m_updateToolBarTimer;
 
     KIO::Job* m_lastHandleUrlStatJob;
+
+#ifndef Q_OS_WIN
+    TerminalPanel* m_terminalPanel;
+#endif
+    PlacesPanel* m_placesPanel;
+    bool m_tearDownFromPlacesRequested;
 };
 
 inline DolphinViewContainer* DolphinMainWindow::activeViewContainer() const

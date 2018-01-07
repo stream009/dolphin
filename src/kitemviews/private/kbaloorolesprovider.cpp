@@ -26,9 +26,11 @@
 #include <Baloo/File>
 #include <KFileMetaData/PropertyInfo>
 #include <KFileMetaData/UserMetaData>
+#include <KFormat>
 
 #include <QTime>
 #include <QMap>
+#include <QCollator>
 
 struct KBalooRolesProviderSingleton
 {
@@ -94,6 +96,9 @@ QHash<QByteArray, QVariant> KBalooRolesProvider::roleValues(const Baloo::File& f
         } else if (role == "duration") {
             const QString duration = durationFromValue(value.toInt());
             values.insert(role, duration);
+        } else if (role == "bitrate") {
+            const QString bitrate = bitrateFromValue(value.toInt());
+            values.insert(role, bitrate);
         } else {
             values.insert(role, value.toString());
         }
@@ -145,8 +150,11 @@ KBalooRolesProvider::KBalooRolesProvider() :
         { "height",        "imageSize" },
         { "nexif.orientation", "orientation", },
         { "artist",     "artist" },
+        { "genre",	"genre"  },
         { "album",    "album" },
         { "duration",      "duration" },
+        { "bitRate", "bitrate" },
+        { "releaseYear",    "releaseYear" },
         { "trackNumber",   "track" },
         { "originUrl", "originUrl" }
     };
@@ -159,7 +167,11 @@ KBalooRolesProvider::KBalooRolesProvider() :
 
 QString KBalooRolesProvider::tagsFromValues(const QStringList& values) const
 {
-    return values.join(QStringLiteral(", "));
+    QStringList alphabeticalOrderTags = values;
+    QCollator coll;
+    coll.setNumericMode(true);
+    std::sort(alphabeticalOrderTags.begin(), alphabeticalOrderTags.end(), [&](const QString& s1, const QString& s2){ return coll.compare(s1, s2) < 0; });
+    return alphabeticalOrderTags.join(QStringLiteral(", "));
 }
 
 QString KBalooRolesProvider::orientationFromValue(int value) const
@@ -185,5 +197,13 @@ QString KBalooRolesProvider::durationFromValue(int value) const
     QTime duration(0, 0, 0);
     duration = duration.addSecs(value);
     return duration.toString(QStringLiteral("hh:mm:ss"));
+}
+
+
+QString KBalooRolesProvider::bitrateFromValue(int value) const
+{
+    KFormat form;
+    QString bitrate = i18nc("@label bitrate (per second)", "%1/s", form.formatByteSize(value, 1, KFormat::MetricBinaryDialect));
+    return bitrate;
 }
 

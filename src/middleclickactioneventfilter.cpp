@@ -1,6 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013 by Dawit Alemayehu <adawit@kde.org>                *
- *   Copyright (C) 2017 by Elvis Angelaccio <elvis.angelaccio@kde.org>     *
+ *   Copyright (C) 2017 Kai Uwe Broulik <kde@privat.broulik.de>            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -18,48 +17,42 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA            *
  ***************************************************************************/
 
-#ifndef DOLPHINREMOVEACTION_H
-#define DOLPHINREMOVEACTION_H
-
-#include "dolphin_export.h"
+#include "middleclickactioneventfilter.h"
 
 #include <QAction>
-#include <QPointer>
+#include <QEvent>
+#include <QMouseEvent>
+#include <QToolBar>
 
-#include <KActionCollection>
-
-/**
- * A QAction that manages the delete based on the current state of
- * the Shift key or the parameter passed to update.
- *
- * This class expects the presence of both the KStandardAction::MoveToTrash and
- * KStandardAction::DeleteFile actions in @ref collection.
- */
-class DOLPHIN_EXPORT DolphinRemoveAction : public QAction
+MiddleClickActionEventFilter::MiddleClickActionEventFilter(QObject *parent) : QObject(parent)
 {
-  Q_OBJECT
-public:
 
-    enum class ShiftState {
-        Unknown,
-        Pressed,
-        Released
-    };
+}
 
-    DolphinRemoveAction(QObject* parent, KActionCollection* collection);
+MiddleClickActionEventFilter::~MiddleClickActionEventFilter() = default;
 
-    /**
-     * Updates this action key based on @p shiftState.
-     * Default value is QueryShiftState, meaning it will query QGuiApplication::modifiers().
-     */
-    void update(ShiftState shiftState = ShiftState::Unknown);
+bool MiddleClickActionEventFilter::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::MouseButtonPress
+            || event->type() == QEvent::MouseButtonRelease) {
+        QMouseEvent *me = static_cast<QMouseEvent *>(event);
 
-private Q_SLOTS:
-    void slotRemoveActionTriggered();
+        if (me->button() == Qt::MiddleButton) {
+            QToolBar *toolBar = qobject_cast<QToolBar *>(watched);
 
-private:
-    QPointer<KActionCollection> m_collection;
-    QPointer<QAction> m_action;
-};
+            QAction *action = toolBar->actionAt(me->pos());
+            if (action) {
+                if (event->type() == QEvent::MouseButtonPress) {
+                    m_lastMiddlePressedAction = action;
+                } else if (event->type() == QEvent::MouseButtonRelease) {
+                    if (m_lastMiddlePressedAction == action) {
+                        emit actionMiddleClicked(action);
+                    }
+                    m_lastMiddlePressedAction = nullptr;
+                }
+            }
+        }
+    }
 
-#endif
+    return QObject::eventFilter(watched, event);
+}

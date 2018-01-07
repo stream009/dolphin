@@ -183,6 +183,7 @@ public:
     int itemAt(const QPointF& pos) const;
     bool isAboveSelectionToggle(int index, const QPointF& pos) const;
     bool isAboveExpansionToggle(int index, const QPointF& pos) const;
+    bool isAboveText(int index, const QPointF& pos) const;
 
     /**
      * @return Index of the first item that is at least partly visible.
@@ -197,12 +198,13 @@ public:
     int lastVisibleIndex() const;
 
     /**
-     * @return Calculates the required size for all items in the model.
-     *         It might be larger than KItemListView::itemSize().
-     *         In this case the layout grid will be stretched to assure an
-     *         unclipped item.
-     *         NOTE: the logical height (width) is actually the
-     *         width (height) if the scroll orientation is Qt::Vertical!
+     * Calculates the required size for all items in the model.
+     * It might be larger than KItemListView::itemSize().
+     * In this case the layout grid will be stretched to assure an
+     * unclipped item.
+     *
+     * @note the logical height (width) is actually the
+     * width (height) if the scroll orientation is Qt::Vertical!
      */
     void calculateItemSizeHints(QVector<qreal>& logicalHeightHints, qreal& logicalWidthHint) const;
 
@@ -824,13 +826,13 @@ public:
     KItemListWidgetCreator();
     virtual ~KItemListWidgetCreator();
 
-    virtual KItemListWidget* create(KItemListView* view);
+    virtual KItemListWidget* create(KItemListView* view) Q_DECL_OVERRIDE;
 
-    virtual void calculateItemSizeHints(QVector<qreal>& logicalHeightHints, qreal& logicalWidthHint, const KItemListView* view) const;
+    virtual void calculateItemSizeHints(QVector<qreal>& logicalHeightHints, qreal& logicalWidthHint, const KItemListView* view) const Q_DECL_OVERRIDE;
 
     virtual qreal preferredRoleColumnWidth(const QByteArray& role,
                                            int index,
-                                           const KItemListView* view) const;
+                                           const KItemListView* view) const Q_DECL_OVERRIDE;
 private:
     KItemListWidgetInformant* m_informant;
 };
@@ -893,7 +895,7 @@ class KItemListGroupHeaderCreator : public KItemListGroupHeaderCreatorBase
 {
 public:
     virtual ~KItemListGroupHeaderCreator();
-    virtual KItemListGroupHeader* create(KItemListView* view);
+    virtual KItemListGroupHeader* create(KItemListView* view) Q_DECL_OVERRIDE;
 };
 
 template <class T>

@@ -37,8 +37,8 @@ PlacesItem::PlacesItem(const KBookmark& bookmark, PlacesItem* parent) :
     m_volume(),
     m_disc(),
     m_mtp(),
-    m_signalHandler(0),
-    m_trashDirLister(0),
+    m_signalHandler(nullptr),
+    m_trashDirLister(nullptr),
     m_bookmark()
 {
     m_signalHandler = new PlacesItemSignalHandler(this);
@@ -272,6 +272,8 @@ void PlacesItem::initializeDevice(const QString& udi)
         setUrl(QUrl::fromLocalFile(m_access->filePath()));
         QObject::connect(m_access.data(), &Solid::StorageAccess::accessibilityChanged,
                          m_signalHandler.data(), &PlacesItemSignalHandler::onAccessibilityChanged);
+        QObject::connect(m_access.data(), &Solid::StorageAccess::teardownRequested,
+                         m_signalHandler.data(), &PlacesItemSignalHandler::onTearDownRequested);
     } else if (m_disc && (m_disc->availableContent() & Solid::OpticalDisc::Audio) != 0) {
         Solid::Block *block = m_device.as<Solid::Block>();
         if (block) {
@@ -316,7 +318,7 @@ void PlacesItem::updateBookmarkForRole(const QByteArray& role)
         }
     } else if (role == "url") {
         m_bookmark.setUrl(url());
-    } else if (role == "udi)") {
+    } else if (role == "udi") {
         m_bookmark.setMetaDataItem(QStringLiteral("UDI"), udi());
     } else if (role == "isSystemItem") {
         m_bookmark.setMetaDataItem(QStringLiteral("isSystemItem"), isSystemItem() ? QStringLiteral("true") : QStringLiteral("false"));
@@ -334,4 +336,9 @@ QString PlacesItem::generateNewId()
     static int count = 0;
     return QString::number(QDateTime::currentDateTimeUtc().toTime_t()) +
             '/' + QString::number(count++) + " (V2)";
+}
+
+PlacesItemSignalHandler *PlacesItem::signalHandler() const
+{
+    return m_signalHandler.data();
 }

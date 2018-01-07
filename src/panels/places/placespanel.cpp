@@ -25,6 +25,7 @@
 
 #include "dolphin_generalsettings.h"
 
+#include "global.h"
 #include <KFileItem>
 #include "dolphindebug.h"
 #include <KDirNotify>
@@ -57,18 +58,24 @@
 
 PlacesPanel::PlacesPanel(QWidget* parent) :
     Panel(parent),
-    m_controller(0),
-    m_model(0),
+    m_controller(nullptr),
+    m_model(nullptr),
+    m_view(nullptr),
     m_storageSetupFailedUrl(),
     m_triggerStorageSetupButton(),
     m_itemDropEventIndex(-1),
-    m_itemDropEventMimeData(0),
-    m_itemDropEvent(0)
+    m_itemDropEventMimeData(nullptr),
+    m_itemDropEvent(nullptr)
 {
 }
 
 PlacesPanel::~PlacesPanel()
 {
+}
+
+void PlacesPanel::proceedWithTearDown()
+{
+    m_model->proceedWithTearDown();
 }
 
 bool PlacesPanel::urlChanged()
@@ -109,6 +116,10 @@ void PlacesPanel::showEvent(QShowEvent* event)
         m_model->setGroupedSorting(true);
         connect(m_model, &PlacesItemModel::errorMessage,
                 this, &PlacesPanel::errorMessage);
+        connect(m_model, &PlacesItemModel::storageTearDownRequested,
+                this, &PlacesPanel::storageTearDownRequested);
+        connect(m_model, &PlacesItemModel::storageTearDownExternallyRequested,
+                this, &PlacesPanel::storageTearDownExternallyRequested);
 
         m_view = new PlacesView();
         m_view->setWidgetCreator(new KItemListWidgetCreator<PlacesItemListWidget>());
@@ -192,12 +203,15 @@ void PlacesPanel::slotItemContextMenuRequested(int index, const QPointF& pos)
         }
     }
 
+    QAction* openInNewWindowAction = menu.addAction(QIcon::fromTheme("window-new"), i18nc("@item:inmenu", "Open in New Window"));
     QAction* openInNewTabAction = menu.addAction(QIcon::fromTheme("tab-new"), i18nc("@item:inmenu", "Open in New Tab"));
     if (!isDevice && !isTrash) {
         menu.addSeparator();
     }
 
-    editAction = menu.addAction(QIcon::fromTheme("document-properties"), i18nc("@item:inmenu", "Edit..."));
+    if (!isDevice) {
+        editAction = menu.addAction(QIcon::fromTheme("document-properties"), i18nc("@item:inmenu", "Edit..."));
+    }
 
     QAction* removeAction = 0;
     if (!isDevice && !item->isSystemItem()) {
@@ -230,12 +244,14 @@ void PlacesPanel::slotItemContextMenuRequested(int index, const QPointF& pos)
             } else if (action == hideAction) {
                 item->setHidden(hideAction->isChecked());
                 m_model->saveBookmarks();
+            } else if (action == openInNewWindowAction) {
+                Dolphin::openNewWindow({PlacesItemModel::convertedUrl(m_model->data(index).value("url").toUrl())}, this);
             } else if (action == openInNewTabAction) {
                 // TriggerItem does set up the storage first and then it will
                 // emit the slotItemMiddleClicked signal, because of Qt::MiddleButton.
                 triggerItem(index, Qt::MiddleButton);
             } else if (action == teardownAction) {
-                m_model->requestTeardown(index);
+                m_model->requestTearDown(index);
             } else if (action == ejectAction) {
                 m_model->requestEject(index);
             }

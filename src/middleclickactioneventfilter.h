@@ -1,6 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2013 by Dawit Alemayehu <adawit@kde.org>                *
- *   Copyright (C) 2017 by Elvis Angelaccio <elvis.angelaccio@kde.org>     *
+ *   Copyright (C) 2017 Kai Uwe Broulik <kde@privat.broulik.de>            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -18,48 +17,34 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA            *
  ***************************************************************************/
 
-#ifndef DOLPHINREMOVEACTION_H
-#define DOLPHINREMOVEACTION_H
+#pragma once
 
 #include "dolphin_export.h"
 
-#include <QAction>
+#include <QObject>
 #include <QPointer>
 
-#include <KActionCollection>
+class QAction;
 
 /**
- * A QAction that manages the delete based on the current state of
- * the Shift key or the parameter passed to update.
- *
- * This class expects the presence of both the KStandardAction::MoveToTrash and
- * KStandardAction::DeleteFile actions in @ref collection.
+ * An event filter that allows to detect a middle click
+ * to trigger e.g. opening something in a new tab.
  */
-class DOLPHIN_EXPORT DolphinRemoveAction : public QAction
+class DOLPHIN_EXPORT MiddleClickActionEventFilter : public QObject
 {
-  Q_OBJECT
+    Q_OBJECT
+
 public:
+    MiddleClickActionEventFilter(QObject *parent);
+    ~MiddleClickActionEventFilter() override;
 
-    enum class ShiftState {
-        Unknown,
-        Pressed,
-        Released
-    };
+signals:
+    void actionMiddleClicked(QAction *action);
 
-    DolphinRemoveAction(QObject* parent, KActionCollection* collection);
-
-    /**
-     * Updates this action key based on @p shiftState.
-     * Default value is QueryShiftState, meaning it will query QGuiApplication::modifiers().
-     */
-    void update(ShiftState shiftState = ShiftState::Unknown);
-
-private Q_SLOTS:
-    void slotRemoveActionTriggered();
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    QPointer<KActionCollection> m_collection;
-    QPointer<QAction> m_action;
-};
+    QPointer<QAction> m_lastMiddlePressedAction;
 
-#endif
+};

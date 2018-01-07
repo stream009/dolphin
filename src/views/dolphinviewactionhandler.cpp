@@ -107,22 +107,23 @@ void DolphinViewActionHandler::createActions()
 
     // File menu
 
-    QAction* rename = m_actionCollection->addAction(QStringLiteral("rename"));
-    rename->setText(i18nc("@action:inmenu File", "Rename..."));
-    m_actionCollection->setDefaultShortcut(rename, Qt::Key_F2);
-    rename->setIcon(QIcon::fromTheme(QStringLiteral("edit-rename")));
-    connect(rename, &QAction::triggered, this, &DolphinViewActionHandler::slotRename);
+    KStandardAction::renameFile(this, &DolphinViewActionHandler::slotRename, m_actionCollection);
 
-    QAction* moveToTrash = m_actionCollection->addAction(QStringLiteral("move_to_trash"));
-    moveToTrash->setText(i18nc("@action:inmenu File", "Move to Trash"));
-    moveToTrash->setIcon(QIcon::fromTheme(QStringLiteral("user-trash")));
-    m_actionCollection->setDefaultShortcut(moveToTrash, QKeySequence::Delete);
-    connect(moveToTrash, &QAction::triggered,
-            this, &DolphinViewActionHandler::slotTrashActivated);
+    auto trashAction = KStandardAction::moveToTrash(this, &DolphinViewActionHandler::slotTrashActivated, m_actionCollection);
+    auto trashShortcuts = trashAction->shortcuts();
+    if (!trashShortcuts.contains(QKeySequence::Delete)) {
+        trashShortcuts.append(QKeySequence::Delete);
+        m_actionCollection->setDefaultShortcuts(trashAction, trashShortcuts);
+    }
 
-    KStandardAction::deleteFile(this, &DolphinViewActionHandler::slotDeleteItems, m_actionCollection);
+    auto deleteAction = KStandardAction::deleteFile(this, &DolphinViewActionHandler::slotDeleteItems, m_actionCollection);
+    auto deleteShortcuts = deleteAction->shortcuts();
+    if (!deleteShortcuts.contains(Qt::SHIFT | Qt::Key_Delete)) {
+        deleteShortcuts.append(Qt::SHIFT | Qt::Key_Delete);
+        m_actionCollection->setDefaultShortcuts(deleteAction, deleteShortcuts);
+    }
 
-    // This action is useful for being enabled when "move_to_trash" should be
+    // This action is useful for being enabled when KStandardAction::MoveToTrash should be
     // disabled and KStandardAction::DeleteFile is enabled (e.g. non-local files), so that Key_Del
     // can be used for deleting the file (#76016). It needs to be a separate action
     // so that the Edit menu isn't affected.
@@ -154,11 +155,11 @@ void DolphinViewActionHandler::createActions()
     connect(viewModeActions, static_cast<void(KSelectAction::*)(QAction*)>(&KSelectAction::triggered), this, &DolphinViewActionHandler::slotViewModeActionTriggered);
 
     KStandardAction::zoomIn(this,
-                            SLOT(zoomIn()),
+                            &DolphinViewActionHandler::zoomIn,
                             m_actionCollection);
 
     KStandardAction::zoomOut(this,
-                             SLOT(zoomOut()),
+                             &DolphinViewActionHandler::zoomOut,
                              m_actionCollection);
 
     KToggleAction* showPreview = m_actionCollection->add<KToggleAction>(QStringLiteral("show_preview"));

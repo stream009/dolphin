@@ -24,11 +24,13 @@
 #include <QTimer>
 #include <QMimeData>
 #include <QVBoxLayout>
+#include <QLoggingCategory>
 
 #include <KFileItemActions>
 #include <KFilePlacesModel>
 #include <KLocalizedString>
 #include <KIO/PreviewJob>
+#include <kio_version.h>
 #include <KMessageWidget>
 #include <KShell>
 #include <QUrl>
@@ -40,6 +42,7 @@
 #endif
 
 #include "global.h"
+#include "dolphindebug.h"
 #include "dolphin_generalsettings.h"
 #include "filterbar/filterbar.h"
 #include "search/dolphinsearchbox.h"
@@ -133,10 +136,18 @@ DolphinViewContainer::DolphinViewContainer(const QUrl& url, QWidget* parent) :
             this, &DolphinViewContainer::slotUrlNavigatorLocationAboutToBeChanged);
     connect(m_urlNavigator, &KUrlNavigator::urlChanged,
             this, &DolphinViewContainer::slotUrlNavigatorLocationChanged);
+    connect(m_urlNavigator, &KUrlNavigator::urlSelectionRequested,
+            this, &DolphinViewContainer::slotUrlSelectionRequested);
     connect(m_urlNavigator, &KUrlNavigator::returnPressed,
             this, &DolphinViewContainer::slotReturnPressed);
-    connect(m_urlNavigator, &KUrlNavigator::urlsDropped,
-            m_view, &DolphinView::dropUrls);
+    connect(m_urlNavigator, &KUrlNavigator::urlsDropped, this, [=](const QUrl &destination, QDropEvent *event) {
+#if KIO_VERSION >= QT_VERSION_CHECK(5, 37, 0)
+        m_view->dropUrls(destination, event, m_urlNavigator->dropWidget());
+#else
+        // TODO: remove as soon as we can hard-depend of KF5 >= 5.37
+        m_view->dropUrls(destination, event, m_view);
+#endif
+    });
 
     // Initialize status bar
     m_statusBar = new DolphinStatusBar(this);
@@ -351,7 +362,7 @@ QString DolphinViewContainer::placesText() const
     QString text;
 
     if (isSearchModeEnabled()) {
-        text = m_searchBox->searchPath().fileName() + QLatin1String(": ") + m_searchBox->text();
+        text = i18n("Search for %1 in %2", m_searchBox->text(), m_searchBox->searchPath().fileName());
     } else {
         text = url().fileName();
         if (text.isEmpty()) {
@@ -591,6 +602,13 @@ void DolphinViewContainer::slotUrlNavigatorLocationChanged(const QUrl& url)
     } else {
         showMessage(i18nc("@info:status", "Invalid protocol"), Error);
     }
+}
+
+void DolphinViewContainer::slotUrlSelectionRequested(const QUrl& url)
+{
+    qCDebug(DolphinDebug) << "slotUrlSelectionRequested: " << url;
+    m_view->markUrlsAsSelected({url});
+    m_view->markUrlAsCurrent(url); // makes the item scroll into view
 }
 
 void DolphinViewContainer::redirect(const QUrl& oldUrl, const QUrl& newUrl)

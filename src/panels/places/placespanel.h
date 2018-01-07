@@ -39,13 +39,16 @@ class PlacesPanel : public Panel
     Q_OBJECT
 
 public:
-    PlacesPanel(QWidget* parent);
+    explicit PlacesPanel(QWidget* parent);
     virtual ~PlacesPanel();
+    void proceedWithTearDown();
 
 signals:
     void placeActivated(const QUrl& url);
     void placeMiddleClicked(const QUrl& url);
     void errorMessage(const QString& error);
+    void storageTearDownRequested(const QString& mountPath);
+    void storageTearDownExternallyRequested(const QString& mountPath);
 
 protected:
     virtual bool urlChanged() Q_DECL_OVERRIDE;

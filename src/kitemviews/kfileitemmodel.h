@@ -30,6 +30,8 @@
 #include <QHash>
 #include <QSet>
 
+#include <functional>
+
 class KFileItemModelDirLister;
 class QTimer;
 
@@ -71,7 +73,7 @@ public:
      *         the root-parent of all items.
      * @see rootItem()
      */
-    QUrl directory() const;
+    QUrl directory() const Q_DECL_OVERRIDE;
 
     /**
      * Cancels the loading of a directory which has been started by either
@@ -280,12 +282,12 @@ private slots:
 private:
     enum RoleType {
         // User visible roles:
-        NoRole, NameRole, SizeRole, ModificationTimeRole, AccessTimeRole, PermissionsRole, OwnerRole,
-        GroupRole, TypeRole, DestinationRole, PathRole,
+        NoRole, NameRole, SizeRole, ModificationTimeRole, CreationTimeRole, AccessTimeRole, PermissionsRole, OwnerRole,
+        GroupRole, TypeRole, DestinationRole, PathRole, DeletionTimeRole,
         // User visible roles available with Baloo:
         CommentRole, TagsRole, RatingRole, ImageSizeRole, OrientationRole,
-        WordCountRole, TitleRole, LineCountRole, ArtistRole, AlbumRole, DurationRole, TrackRole,
-        OriginUrlRole,
+        WordCountRole, TitleRole, LineCountRole, ArtistRole, GenreRole, AlbumRole, DurationRole, TrackRole, ReleaseYearRole,
+        BitrateRole, OriginUrlRole,
         // Non-visible roles:
         IsDirRole, IsLinkRole, IsHiddenRole, IsExpandedRole, IsExpandableRole, ExpandedParentsCountRole,
         // Mandatory last entry:
@@ -383,7 +385,7 @@ private:
 
     QList<QPair<int, QVariant> > nameRoleGroups() const;
     QList<QPair<int, QVariant> > sizeRoleGroups() const;
-    QList<QPair<int, QVariant> > timeRoleGroups(KFileItem::FileTimes which) const;
+    QList<QPair<int, QVariant> > timeRoleGroups(std::function<QDateTime(const ItemData *)> fileTimeCb) const;
     QList<QPair<int, QVariant> > permissionRoleGroups() const;
     QList<QPair<int, QVariant> > ratingRoleGroups() const;
     QList<QPair<int, QVariant> > genericStringRoleGroups(const QByteArray& typeForRole) const;

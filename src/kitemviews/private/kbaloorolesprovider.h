@@ -62,6 +62,7 @@ protected:
 private:
     /**
      * @return User visible string for the given tag-values.
+     *         The tag-values are sorted in alphabetical order.
      */
     QString tagsFromValues(const QStringList& values) const;
 
@@ -77,6 +78,12 @@ private:
      *         in seconds.
      */
     QString durationFromValue(int value) const;
+
+    /**
+     * @return Bitrate in the format N kB/s for the value given
+     *         in b/s.
+     */
+    QString bitrateFromValue(int value) const;
 
 private:
     QSet<QByteArray> m_roles;

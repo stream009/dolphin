@@ -253,8 +253,8 @@ void DolphinPart::slotSelectionChanged(const KFileItemList& selection)
 {
     const bool hasSelection = !selection.isEmpty();
 
-    QAction* renameAction  = actionCollection()->action(QStringLiteral("rename"));
-    QAction* moveToTrashAction = actionCollection()->action(QStringLiteral("move_to_trash"));
+    QAction* renameAction  = actionCollection()->action(KStandardAction::name(KStandardAction::RenameFile));
+    QAction* moveToTrashAction = actionCollection()->action(KStandardAction::name(KStandardAction::MoveToTrash));
     QAction* deleteAction = actionCollection()->action(KStandardAction::name(KStandardAction::DeleteFile));
     QAction* editMimeTypeAction = actionCollection()->action(QStringLiteral("editMimeType"));
     QAction* propertiesAction = actionCollection()->action(QStringLiteral("properties"));
@@ -352,7 +352,7 @@ void DolphinPart::slotRequestItemInfo(const KFileItem& item)
         updateStatusBar();
     } else {
         const QString escapedText = Qt::convertFromPlainText(item.getStatusBarInfo());
-        ReadOnlyPart::setStatusBarText(QStringLiteral("<qt>%1</qt>").arg(escapedText));
+        emit ReadOnlyPart::setStatusBarText(QStringLiteral("<qt>%1</qt>").arg(escapedText));
     }
 }
 
@@ -432,7 +432,7 @@ void DolphinPart::slotOpenContextMenu(const QPoint& pos,
             if (showDeleteAction && showMoveToTrashAction) {
                 delete m_removeAction;
                 m_removeAction = 0;
-                editActions.append(actionCollection()->action(QStringLiteral("move_to_trash")));
+                editActions.append(actionCollection()->action(KStandardAction::name(KStandardAction::MoveToTrash)));
                 editActions.append(actionCollection()->action(KStandardAction::name(KStandardAction::DeleteFile)));
             } else if (showDeleteAction && !showMoveToTrashAction) {
                 editActions.append(actionCollection()->action(KStandardAction::name(KStandardAction::DeleteFile)));
@@ -447,7 +447,7 @@ void DolphinPart::slotOpenContextMenu(const QPoint& pos,
         }
 
         if (supportsMoving) {
-            editActions.append(actionCollection()->action(QStringLiteral("rename")));
+            editActions.append(actionCollection()->action(KStandardAction::name(KStandardAction::RenameFile)));
         }
 
         // Normally KonqPopupMenu only shows the "Create new" submenu in the current view
@@ -575,7 +575,7 @@ void DolphinPart::updateStatusBar()
 
 void DolphinPart::updateProgress(int percent)
 {
-    m_extension->loadingProgress(percent);
+    emit m_extension->loadingProgress(percent);
 }
 
 void DolphinPart::createDirectory()
@@ -597,6 +597,7 @@ void DolphinPart::setFilesToSelect(const QList<QUrl>& files)
 
 bool DolphinPart::eventFilter(QObject* obj, QEvent* event)
 {
+    using ShiftState = DolphinRemoveAction::ShiftState;
     const int type = event->type();
 
     if ((type == QEvent::KeyPress || type == QEvent::KeyRelease) && m_removeAction) {
@@ -604,7 +605,7 @@ bool DolphinPart::eventFilter(QObject* obj, QEvent* event)
         if (menu && menu->parent() == m_view) {
             QKeyEvent* ev = static_cast<QKeyEvent*>(event);
             if (ev->key() == Qt::Key_Shift) {
-                m_removeAction->update();
+                m_removeAction->update(type == QEvent::KeyPress ? ShiftState::Pressed : ShiftState::Released);
             }
         }
     }

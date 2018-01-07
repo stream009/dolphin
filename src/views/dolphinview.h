@@ -363,9 +363,9 @@ public slots:
     void pasteIntoFolder();
 
     /**
-     * Handles a drop of @p dropEvent onto @p destUrl
+     * Handles a drop of @p dropEvent onto widget @p dropWidget and destination @p destUrl
      */
-    void dropUrls(const QUrl &destUrl, QDropEvent *dropEvent);
+    void dropUrls(const QUrl &destUrl, QDropEvent *dropEvent, QWidget *dropWidget);
 
     void stopLoading();
 
@@ -544,6 +544,12 @@ signals:
      */
     void toggleActiveViewRequested();
 
+    /**
+     * Is emitted when the user clicks a tag or a link
+     * in the metadata widget of a tooltip.
+     */
+    void urlActivated(const QUrl& url);
+
 protected:
     /** Changes the zoom level if Control is pressed during a wheel event. */
     virtual void wheelEvent(QWheelEvent* event) Q_DECL_OVERRIDE;
@@ -570,6 +576,8 @@ private slots:
     void slotItemDropEvent(int index, QGraphicsSceneDragDropEvent* event);
     void slotModelChanged(KItemModelBase* current, KItemModelBase* previous);
     void slotMouseButtonPressed(int itemIndex, Qt::MouseButtons buttons);
+    void slotRenameDialogRenamingFinished(const QList<QUrl>& urls);
+    void slotSelectedItemTextPressed(int index);
 
     /*
      * Is called when new items get pasted or dropped.
@@ -700,6 +708,8 @@ private slots:
      */
     void calculateItemCount(int& fileCount, int& folderCount, KIO::filesize_t& totalFileSize) const;
 
+    void slotTwoClicksRenamingTimerTimeout();
+
 private:
     void loadDirectory(const QUrl& url, bool reload = false);
 
@@ -754,6 +764,16 @@ private:
      */
     QUrl viewPropertiesUrl() const;
 
+    /**
+     * Clears the selection and updates current item and selection according to the parameters
+     *
+     * @param current URL to be set as current
+     * @param selected list of selected items
+     */
+    void forceUrlsSelection(const QUrl& current, const QList<QUrl>& selected);
+
+    void abortTwoClicksRenaming();
+
 private:
     void updatePalette();
 
@@ -788,6 +808,9 @@ private:
     bool m_markFirstNewlySelectedItemAsCurrent;
 
     VersionControlObserver* m_versionControlObserver;
+
+    QTimer* m_twoClicksRenamingTimer;
+    QUrl m_twoClicksRenamingItemUrl;
 
     // For unit tests
     friend class TestBase;

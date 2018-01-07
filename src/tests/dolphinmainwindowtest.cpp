@@ -1,5 +1,4 @@
 /***************************************************************************
- *   Copyright (C) 2013 by Dawit Alemayehu <adawit@kde.org>                *
  *   Copyright (C) 2017 by Elvis Angelaccio <elvis.angelaccio@kde.org>     *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,48 +17,53 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA            *
  ***************************************************************************/
 
-#ifndef DOLPHINREMOVEACTION_H
-#define DOLPHINREMOVEACTION_H
+#include "dolphinmainwindow.h"
+#include "dolphintabpage.h"
+#include "dolphintabwidget.h"
+#include "dolphinviewcontainer.h"
 
-#include "dolphin_export.h"
+#include <QTest>
 
-#include <QAction>
-#include <QPointer>
-
-#include <KActionCollection>
-
-/**
- * A QAction that manages the delete based on the current state of
- * the Shift key or the parameter passed to update.
- *
- * This class expects the presence of both the KStandardAction::MoveToTrash and
- * KStandardAction::DeleteFile actions in @ref collection.
- */
-class DOLPHIN_EXPORT DolphinRemoveAction : public QAction
+class DolphinMainWindowTest : public QObject
 {
-  Q_OBJECT
-public:
+    Q_OBJECT
 
-    enum class ShiftState {
-        Unknown,
-        Pressed,
-        Released
-    };
-
-    DolphinRemoveAction(QObject* parent, KActionCollection* collection);
-
-    /**
-     * Updates this action key based on @p shiftState.
-     * Default value is QueryShiftState, meaning it will query QGuiApplication::modifiers().
-     */
-    void update(ShiftState shiftState = ShiftState::Unknown);
-
-private Q_SLOTS:
-    void slotRemoveActionTriggered();
+private slots:
+    void init();
+    void testClosingTabsWithSearchBoxVisible();
 
 private:
-    QPointer<KActionCollection> m_collection;
-    QPointer<QAction> m_action;
+    QScopedPointer<DolphinMainWindow> m_mainWindow;
 };
 
-#endif
+void DolphinMainWindowTest::init()
+{
+    m_mainWindow.reset(new DolphinMainWindow());
+}
+
+// See https://bugs.kde.org/show_bug.cgi?id=379135
+void DolphinMainWindowTest::testClosingTabsWithSearchBoxVisible()
+{
+    m_mainWindow->openDirectories({ QUrl::fromLocalFile(QDir::homePath()) }, false);
+    m_mainWindow->show();
+    // Without this call the searchbox doesn't get FocusIn events.
+    QTest::qWaitForWindowExposed(m_mainWindow.data());
+    QVERIFY(m_mainWindow->isVisible());
+
+    auto tabWidget = m_mainWindow->findChild<DolphinTabWidget*>("tabWidget");
+    QVERIFY(tabWidget);
+
+    // Show search box on first tab.
+    tabWidget->currentTabPage()->activeViewContainer()->setSearchModeEnabled(true);
+
+    tabWidget->openNewActivatedTab(QUrl::fromLocalFile(QDir::homePath()));
+    QCOMPARE(tabWidget->count(), 2);
+
+    // Triggers the crash in bug #379135.
+    tabWidget->closeTab();
+    QCOMPARE(tabWidget->count(), 1);
+}
+
+QTEST_MAIN(DolphinMainWindowTest)
+
+#include "dolphinmainwindowtest.moc"

@@ -99,7 +99,8 @@ DolphinView::DolphinView(const QUrl& url, QWidget* parent) :
     m_selectedUrls(),
     m_clearSelectionBeforeSelectingNewItems(false),
     m_markFirstNewlySelectedItemAsCurrent(false),
-    m_versionControlObserver(0)
+    m_versionControlObserver(0),
+    m_twoClicksRenamingTimer(nullptr)
 {
     m_topLayout = new QVBoxLayout(this);
     m_topLayout->setSpacing(0);
@@ -150,6 +151,7 @@ DolphinView::DolphinView(const QUrl& url, QWidget* parent) :
     connect(controller, &KItemListController::itemDropEvent, this, &DolphinView::slotItemDropEvent);
     connect(controller, &KItemListController::escapePressed, this, &DolphinView::stopLoading);
     connect(controller, &KItemListController::modelChanged, this, &DolphinView::slotModelChanged);
+    connect(controller, &KItemListController::selectedItemTextPressed, this, &DolphinView::slotSelectedItemTextPressed);
 
     connect(m_model, &KFileItemModel::directoryLoadingStarted,       this, &DolphinView::slotDirectoryLoadingStarted);
     connect(m_model, &KFileItemModel::directoryLoadingCompleted,     this, &DolphinView::slotDirectoryLoadingCompleted);
@@ -182,12 +184,17 @@ DolphinView::DolphinView(const QUrl& url, QWidget* parent) :
             this, &DolphinView::slotSelectionChanged);
 
     m_toolTipManager = new ToolTipManager(this);
+    connect(m_toolTipManager, &ToolTipManager::urlActivated, this, &DolphinView::urlActivated);
 
     m_versionControlObserver = new VersionControlObserver(this);
     m_versionControlObserver->setModel(m_model);
     connect(m_versionControlObserver, &VersionControlObserver::infoMessage, this, &DolphinView::infoMessage);
     connect(m_versionControlObserver, &VersionControlObserver::errorMessage, this, &DolphinView::errorMessage);
     connect(m_versionControlObserver, &VersionControlObserver::operationCompletedMessage, this, &DolphinView::operationCompletedMessage);
+
+    m_twoClicksRenamingTimer = new QTimer(this);
+    m_twoClicksRenamingTimer->setSingleShot(true);
+    connect(m_twoClicksRenamingTimer, &QTimer::timeout, this, &DolphinView::slotTwoClicksRenamingTimerTimeout);
 
     applyViewProperties();
     m_topLayout->addWidget(m_container);
@@ -634,6 +641,9 @@ void DolphinView::renameSelectedItems()
                 this, &DolphinView::slotRoleEditingFinished);
     } else {
         RenameDialog* dialog = new RenameDialog(this, items);
+
+        connect(dialog, &RenameDialog::renamingFinished, this, &DolphinView::slotRenameDialogRenamingFinished);
+
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         dialog->show();
         dialog->raise();
@@ -722,6 +732,12 @@ void DolphinView::updatePalette()
     update();
 }
 
+void DolphinView::abortTwoClicksRenaming()
+{
+    m_twoClicksRenamingItemUrl.clear();
+    m_twoClicksRenamingTimer->stop();
+}
+
 bool DolphinView::eventFilter(QObject* watched, QEvent* event)
 {
     switch (event->type()) {
@@ -734,7 +750,7 @@ bool DolphinView::eventFilter(QObject* watched, QEvent* event)
         if (GeneralSettings::useTabForSwitchingSplitView()) {
             QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
             if (keyEvent->key() == Qt::Key_Tab && keyEvent->modifiers() == Qt::NoModifier) {
-                toggleActiveViewRequested();
+                emit toggleActiveViewRequested();
                 return true;
             }
         }
@@ -789,13 +805,14 @@ void DolphinView::hideEvent(QHideEvent* event)
 
 bool DolphinView::event(QEvent* event)
 {
-    /* See Bug 297355
-     * Dolphin leaves file preview tooltips open even when is not visible.
-     *
-     * Hide tool-tip when Dolphin loses focus.
-     */
     if (event->type() == QEvent::WindowDeactivate) {
+        /* See Bug 297355
+         * Dolphin leaves file preview tooltips open even when is not visible.
+         *
+         * Hide tool-tip when Dolphin loses focus.
+         */
         hideToolTip();
+        abortTwoClicksRenaming();
     }
 
     return QWidget::event(event);
@@ -808,6 +825,8 @@ void DolphinView::activate()
 
 void DolphinView::slotItemActivated(int index)
 {
+    abortTwoClicksRenaming();
+
     const KFileItem item = m_model->fileItem(index);
     if (!item.isNull()) {
         emit itemActivated(item);
@@ -817,6 +836,8 @@ void DolphinView::slotItemActivated(int index)
 void DolphinView::slotItemsActivated(const KItemSet& indexes)
 {
     Q_ASSERT(indexes.count() >= 2);
+
+    abortTwoClicksRenaming();
 
     if (indexes.count() > 5) {
         QString question = i18np("Are you sure you want to open 1 item?", "Are you sure you want to open %1 items?", indexes.count());
@@ -1050,14 +1071,14 @@ void DolphinView::slotItemDropEvent(int index, QGraphicsSceneDragDropEvent* even
                          event->mimeData(),
                          event->buttons(),
                          event->modifiers());
-    dropUrls(destUrl, &dropEvent);
+    dropUrls(destUrl, &dropEvent, this);
 
     setActive(true);
 }
 
-void DolphinView::dropUrls(const QUrl &destUrl, QDropEvent *dropEvent)
+void DolphinView::dropUrls(const QUrl &destUrl, QDropEvent *dropEvent, QWidget *dropWidget)
 {
-    KIO::DropJob* job = DragAndDropHelper::dropUrls(destUrl, dropEvent, this);
+    KIO::DropJob* job = DragAndDropHelper::dropUrls(destUrl, dropEvent, dropWidget);
 
     if (job) {
         connect(job, &KIO::DropJob::result, this, &DolphinView::slotPasteJobResult);
@@ -1098,6 +1119,18 @@ void DolphinView::slotMouseButtonPressed(int itemIndex, Qt::MouseButtons buttons
         emit goBackRequested();
     } else if (buttons & Qt::ForwardButton) {
         emit goForwardRequested();
+    }
+}
+
+void DolphinView::slotSelectedItemTextPressed(int index)
+{
+    if (GeneralSettings::renameInline()) {
+        const KFileItem item = m_model->fileItem(index);
+        const KFileItemListProperties capabilities(KFileItemList() << item);
+        if (capabilities.supportsMoving()) {
+            m_twoClicksRenamingItemUrl = item.url();
+            m_twoClicksRenamingTimer->start(QApplication::doubleClickInterval());
+        }
     }
 }
 
@@ -1307,9 +1340,7 @@ QUrl DolphinView::openItemAsFolderUrl(const KFileItem& item, const bool browseTh
 void DolphinView::observeCreatedItem(const QUrl& url)
 {
     if (m_active) {
-        clearSelection();
-        markUrlAsCurrent(url);
-        markUrlsAsSelected({url});
+        forceUrlsSelection(url, {url});
     }
 }
 
@@ -1395,6 +1426,22 @@ void DolphinView::calculateItemCount(int& fileCount,
         } else {
             ++fileCount;
             totalFileSize += item.size();
+        }
+    }
+}
+
+void DolphinView::slotTwoClicksRenamingTimerTimeout()
+{
+    const KItemListSelectionManager* selectionManager = m_container->controller()->selectionManager();
+
+    // verify that only one item is selected and that no item is dragged
+    if (selectionManager->selectedItems().count() == 1 && !m_dragging) {
+        const int index = selectionManager->currentItem();
+        const QUrl fileItemUrl = m_model->fileItem(index).url();
+
+        // check if the selected item was the same item that started the twoClicksRenaming
+        if (fileItemUrl.isValid() && m_twoClicksRenamingItemUrl == fileItemUrl) {
+            renameSelectedItems();
         }
     }
 }
@@ -1539,6 +1586,8 @@ void DolphinView::slotRoleEditingFinished(int index, const QByteArray& role, con
             KJobWidgets::setWindow(job, this);
             KIO::FileUndoManager::self()->recordJob(KIO::FileUndoManager::Rename, {oldUrl}, newUrl, job);
             job->uiDelegate()->setAutoErrorHandlingEnabled(true);
+
+            forceUrlsSelection(newUrl, {newUrl});
 
             if (!newNameExistsAlready) {
                 // Only connect the result signal if there is no item with the new name
@@ -1745,4 +1794,17 @@ QUrl DolphinView::viewPropertiesUrl() const
     url.setScheme(m_url.scheme());
     url.setPath(m_viewPropertiesContext);
     return url;
+}
+
+void DolphinView::slotRenameDialogRenamingFinished(const QList<QUrl>& urls)
+{
+    forceUrlsSelection(urls.first(), urls);
+}
+
+void DolphinView::forceUrlsSelection(const QUrl& current, const QList<QUrl>& selected)
+{
+    clearSelection();
+    m_clearSelectionBeforeSelectingNewItems = true;
+    markUrlAsCurrent(current);
+    markUrlsAsSelected(selected);
 }

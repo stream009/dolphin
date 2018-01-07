@@ -127,7 +127,13 @@ public:
      * @deprecated The first tab state version has no version number, we keep
      *             this method to restore old states (<= Dolphin 4.14.x).
      */
-    void restoreStateV1(const QByteArray& state);
+    Q_DECL_DEPRECATED void restoreStateV1(const QByteArray& state);
+
+    /**
+     * Set whether the tab page is active
+     *
+     */
+    void setActive(bool active);
 
 signals:
     void activeViewChanged(DolphinViewContainer* viewContainer);
@@ -165,6 +171,7 @@ private:
 
     bool m_primaryViewActive;
     bool m_splitViewEnabled;
+    bool m_active;
 };
 
 #endif // DOLPHIN_TAB_PAGE_H

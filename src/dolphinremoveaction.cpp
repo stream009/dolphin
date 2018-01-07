@@ -1,5 +1,6 @@
 /***************************************************************************
- *   Copyright (C) 2013 by Dawit Alemayehu <adawit@kde.org                 *
+ *   Copyright (C) 2013 by Dawit Alemayehu <adawit@kde.org>                *
+ *   Copyright (C) 2017 by Elvis Angelaccio <elvis.angelaccio@kde.org>     *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -39,23 +40,44 @@ void DolphinRemoveAction::slotRemoveActionTriggered()
     }
 }
 
-void DolphinRemoveAction::update()
+void DolphinRemoveAction::update(ShiftState shiftState)
 {
-    Q_ASSERT(m_collection);
-    // Using setText(action->text()) does not apply the &-shortcut.
-    // This is only done until the original action has been shown at least once. To
-    // bypass this issue, the text and &-shortcut is applied manually.
-    if (qApp->queryKeyboardModifiers() & Qt::ShiftModifier) {
-        m_action = m_collection ? m_collection->action(KStandardAction::name(KStandardAction::DeleteFile)) : 0;
-        setText(i18nc("@action:inmenu", "&Delete"));
-    } else {
-        m_action = m_collection ? m_collection->action(QStringLiteral("move_to_trash")) : 0;
-        setText(i18nc("@action:inmenu", "&Move to Trash"));
+    if (!m_collection) {
+        m_action = nullptr;
+        return;
+    }
+
+    if (shiftState == ShiftState::Unknown) {
+        shiftState = QGuiApplication::keyboardModifiers() & Qt::ShiftModifier ? ShiftState::Pressed : ShiftState::Released;
+    }
+
+    switch (shiftState) {
+    case ShiftState::Pressed: {
+        m_action = m_collection->action(KStandardAction::name(KStandardAction::DeleteFile));
+        // Make sure we show Shift+Del in the context menu.
+        auto deleteShortcuts = m_action->shortcuts();
+        deleteShortcuts.removeAll(Qt::SHIFT | Qt::Key_Delete);
+        deleteShortcuts.prepend(Qt::SHIFT | Qt::Key_Delete);
+        m_collection->setDefaultShortcuts(this, deleteShortcuts);
+        break;
+    }
+    case ShiftState::Released: {
+        m_action = m_collection->action(KStandardAction::name(KStandardAction::MoveToTrash));
+        // Make sure we show Del in the context menu.
+        auto trashShortcuts = m_action->shortcuts();
+        trashShortcuts.removeAll(QKeySequence::Delete);
+        trashShortcuts.prepend(QKeySequence::Delete);
+        m_collection->setDefaultShortcuts(this, trashShortcuts);
+        break;
+    }
+    case ShiftState::Unknown:
+        Q_UNREACHABLE();
+        break;
     }
 
     if (m_action) {
+        setText(m_action->text());
         setIcon(m_action->icon());
-        m_collection->setDefaultShortcuts(this, m_action->shortcuts());
         setEnabled(m_action->isEnabled());
     }
 }

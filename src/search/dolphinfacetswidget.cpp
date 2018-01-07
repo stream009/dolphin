@@ -29,25 +29,27 @@
 
 DolphinFacetsWidget::DolphinFacetsWidget(QWidget* parent) :
     QWidget(parent),
-    m_documents(0),
-    m_images(0),
-    m_audio(0),
-    m_videos(0),
-    m_anytime(0),
-    m_today(0),
-    m_yesterday(0),
-    m_thisWeek(0),
-    m_thisMonth(0),
-    m_thisYear(0),
-    m_anyRating(0),
-    m_oneOrMore(0),
-    m_twoOrMore(0),
-    m_threeOrMore(0),
-    m_fourOrMore(0),
-    m_maxRating(0)
+    m_folders(nullptr),
+    m_documents(nullptr),
+    m_images(nullptr),
+    m_audio(nullptr),
+    m_videos(nullptr),
+    m_anytime(nullptr),
+    m_today(nullptr),
+    m_yesterday(nullptr),
+    m_thisWeek(nullptr),
+    m_thisMonth(nullptr),
+    m_thisYear(nullptr),
+    m_anyRating(nullptr),
+    m_oneOrMore(nullptr),
+    m_twoOrMore(nullptr),
+    m_threeOrMore(nullptr),
+    m_fourOrMore(nullptr),
+    m_maxRating(nullptr)
 {
     QButtonGroup* filetypeGroup = new QButtonGroup(this);
     m_anyType   = createRadioButton(i18nc("@option:check", "Any"), filetypeGroup);
+    m_folders   = createRadioButton(i18nc("@option:check", "Folders"), filetypeGroup);
     m_documents = createRadioButton(i18nc("@option:check", "Documents"), filetypeGroup);
     m_images    = createRadioButton(i18nc("@option:check", "Images"), filetypeGroup);
     m_audio     = createRadioButton(i18nc("@option:check", "Audio Files"), filetypeGroup);
@@ -56,6 +58,7 @@ DolphinFacetsWidget::DolphinFacetsWidget(QWidget* parent) :
     QVBoxLayout* typeLayout = new QVBoxLayout();
     typeLayout->setSpacing(0);
     typeLayout->addWidget(m_anyType);
+    typeLayout->addWidget(m_folders);
     typeLayout->addWidget(m_documents);
     typeLayout->addWidget(m_images);
     typeLayout->addWidget(m_audio);
@@ -152,7 +155,9 @@ QString DolphinFacetsWidget::ratingTerm() const
 
 QString DolphinFacetsWidget::facetType() const
 {
-    if (m_documents->isChecked()) {
+    if (m_folders->isChecked()) {
+        return QStringLiteral("Folder");
+    } else if (m_documents->isChecked()) {
         return QStringLiteral("Document");
     } else if (m_images->isChecked()) {
         return QStringLiteral("Image");

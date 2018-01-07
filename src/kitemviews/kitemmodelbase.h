@@ -28,6 +28,7 @@
 #include <kitemviews/kitemrange.h>
 #include <kitemviews/kitemset.h>
 
+#include <QUrl>
 #include <QHash>
 #include <QObject>
 #include <QVariant>
@@ -172,6 +173,30 @@ public:
     // decision whether it accepts the drop?
     virtual bool supportsDropping(int index) const;
 
+    /**
+     * @return An internal mimetype to signal that an itemDropEvent() should be rejected by
+     *         the receiving model.
+     *
+     *         This mimeType can be used in createMimeData() to notify that the
+     *         drop-onto-items events should be ignored, while the drop-between-items
+     *         ones should be still accepted.
+     */
+    QString blacklistItemDropEventMimeType() const;
+
+    /**
+     * @return URL of the item at the specified index
+     */
+    virtual QUrl url(int index) const;
+
+    /**
+     * @return True, if item at specified index is a directory
+     */
+    virtual bool isDir(int index) const;
+
+    /**
+     * @return Parent directory of the items that are shown
+     */
+    virtual QUrl directory() const;
 signals:
     /**
      * Is emitted if one or more items have been inserted. Each item-range consists

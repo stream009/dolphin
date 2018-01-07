@@ -68,7 +68,7 @@ DolphinContextMenu::DolphinContextMenu(DolphinMainWindow* parent,
     m_baseUrl(baseUrl),
     m_baseFileItem(0),
     m_selectedItems(),
-    m_selectedItemsProperties(0),
+    m_selectedItemsProperties(nullptr),
     m_context(NoContext),
     m_copyToMenu(parent),
     m_customActions(),
@@ -84,7 +84,7 @@ DolphinContextMenu::DolphinContextMenu(DolphinMainWindow* parent,
 DolphinContextMenu::~DolphinContextMenu()
 {
     delete m_selectedItemsProperties;
-    m_selectedItemsProperties = 0;
+    m_selectedItemsProperties = nullptr;
 }
 
 void DolphinContextMenu::setCustomActions(const QList<QAction*>& actions)
@@ -124,7 +124,7 @@ DolphinContextMenu::Command DolphinContextMenu::open()
 void DolphinContextMenu::keyPressEvent(QKeyEvent *ev)
 {
     if (m_removeAction && ev->key() == Qt::Key_Shift) {
-        m_removeAction->update();
+        m_removeAction->update(DolphinRemoveAction::ShiftState::Pressed);
     }
     QMenu::keyPressEvent(ev);
 }
@@ -132,7 +132,7 @@ void DolphinContextMenu::keyPressEvent(QKeyEvent *ev)
 void DolphinContextMenu::keyReleaseEvent(QKeyEvent *ev)
 {
     if (m_removeAction && ev->key() == Qt::Key_Shift) {
-        m_removeAction->update();
+        m_removeAction->update(DolphinRemoveAction::ShiftState::Released);
     }
     QMenu::keyReleaseEvent(ev);
 }
@@ -195,10 +195,10 @@ void DolphinContextMenu::openItemContextMenu()
 {
     Q_ASSERT(!m_fileInfo.isNull());
 
-    QAction* openParentAction = 0;
-    QAction* openParentInNewWindowAction = 0;
-    QAction* openParentInNewTabAction = 0;
-    QAction* addToPlacesAction = 0;
+    QAction* openParentAction = nullptr;
+    QAction* openParentInNewWindowAction = nullptr;
+    QAction* openParentInNewTabAction = nullptr;
+    QAction* addToPlacesAction = nullptr;
     const KFileItemListProperties& selectedItemsProps = selectedItemsProperties();
 
     if (m_selectedItems.count() == 1) {
@@ -283,7 +283,7 @@ void DolphinContextMenu::openItemContextMenu()
     fileItemActions.setItemListProperties(selectedItemsProps);
     addServiceActions(fileItemActions);
 
-    addFileItemPluginActions(fileItemActions);
+    fileItemActions.addPluginActionsTo(this);
 
     addVersionControlPluginActions();
 
@@ -355,7 +355,7 @@ void DolphinContextMenu::openViewportContextMenu()
     fileItemActions.setItemListProperties(baseUrlProperties);
     addServiceActions(fileItemActions);
 
-    addFileItemPluginActions(fileItemActions);
+    fileItemActions.addPluginActionsTo(this);
 
     addVersionControlPluginActions();
 
@@ -369,11 +369,16 @@ void DolphinContextMenu::openViewportContextMenu()
     QAction* action = exec(m_pos);
     if (addToPlacesAction && (action == addToPlacesAction)) {
         const DolphinViewContainer* container =  m_mainWindow->activeViewContainer();
-        if (container->url().isValid()) {
+        const QUrl url = container->url();
+        if (url.isValid()) {
             PlacesItemModel model;
-            PlacesItem* item = model.createPlacesItem(container->placesText(),
-                                                      container->url(),
-                                                      KIO::iconNameForUrl(container->url()));
+            QString icon;
+            if (container->isSearchModeEnabled()) {
+                icon = QStringLiteral("folder-saved-search-symbolic");
+            } else {
+                icon = KIO::iconNameForUrl(url);
+            }
+            PlacesItem* item = model.createPlacesItem(container->placesText(), url, icon);
             model.appendItemToGroup(item);
             model.saveBookmarks();
         }
@@ -392,8 +397,7 @@ void DolphinContextMenu::insertDefaultItemActions(const KFileItemListProperties&
     addSeparator();
 
     // Insert 'Rename'
-    QAction* renameAction = collection->action(QStringLiteral("rename"));
-    addAction(renameAction);
+    addAction(collection->action(KStandardAction::name(KStandardAction::RenameFile)));
 
     // Insert 'Move to Trash' and/or 'Delete'
     if (properties.supportsDeleting()) {
@@ -405,7 +409,7 @@ void DolphinContextMenu::insertDefaultItemActions(const KFileItemListProperties&
         if (showDeleteAction && showMoveToTrashAction) {
             delete m_removeAction;
             m_removeAction = 0;
-            addAction(m_mainWindow->actionCollection()->action(QStringLiteral("move_to_trash")));
+            addAction(m_mainWindow->actionCollection()->action(KStandardAction::name(KStandardAction::MoveToTrash)));
             addAction(m_mainWindow->actionCollection()->action(KStandardAction::name(KStandardAction::DeleteFile)));
         } else if (showDeleteAction && !showMoveToTrashAction) {
             addAction(m_mainWindow->actionCollection()->action(KStandardAction::name(KStandardAction::DeleteFile)));
@@ -482,11 +486,6 @@ void DolphinContextMenu::addServiceActions(KFileItemActions& fileItemActions)
 
     // insert 'Actions' sub menu
     fileItemActions.addServiceActionsTo(this);
-}
-
-void DolphinContextMenu::addFileItemPluginActions(KFileItemActions& fileItemActions)
-{
-    fileItemActions.addPluginActionsTo(this);
 }
 
 void DolphinContextMenu::addVersionControlPluginActions()
